@@ -2846,10 +2846,26 @@
               </select>
               <select class="fsel" id="fe" onchange="filterTable()">
                 <option value="">Estado</option>
-                <option value="dev">En desarrollo</option>
-                <option value="fact">Facturado</option>
-                <option value="cot">Cotización</option>
-                <option value="stop">Cancelado / Pausa</option>
+                <option>New</option>
+                <option>Active</option>
+                <option>Backlog en Elaboración</option>
+                <option>Backlog Enviado</option>
+                <option>Backlog Aprobado</option>
+                <option>En Análisis</option>
+                <option>Estimación Horas</option>
+                <option>Elaboración Cotización</option>
+                <option>Cotización Enviada</option>
+                <option>Cotización Aprobada</option>
+                <option>En Desarrollo</option>
+                <option>En Desarrollo BI</option>
+                <option>En Desarrollo Progress</option>
+                <option>En Desarrollo Salesforce</option>
+                <option>En Desarrollo SAP</option>
+                <option>Pruebas Internas</option>
+                <option>Completado</option>
+                <option>Facturado</option>
+                <option>En Pausa (Stand By)</option>
+                <option>Cancelado</option>
               </select>
               <select class="fsel" id="fpf" onchange="filterTable()">
                 <option value="">Portafolio</option>
@@ -2968,19 +2984,26 @@
                       </div>
                       <div class="fg"><label class="flabel">Estado</label>
                         <select class="fselect" id="f-est">
-                          <option>01. Creación del backlog</option>
-                          <option>02. Backlog enviado</option>
-                          <option>03. En análisis</option>
-                          <option>04. Análisis req. horas</option>
-                          <option>05. Elaboración cotización</option>
-                          <option>06. Cotización enviada</option>
-                          <option>07. Cotización Aprobada</option>
-                          <option>08. En desarrollo</option>
-                          <option>09. Pruebas internas</option>
-                          <option>10. Completado</option>
-                          <option>11. Facturado</option>
+                          <option>New</option>
+                          <option>Active</option>
+                          <option>Backlog en Elaboración</option>
+                          <option>Backlog Enviado</option>
+                          <option>Backlog Aprobado</option>
+                          <option>En Análisis</option>
+                          <option>Estimación Horas</option>
+                          <option>Elaboración Cotización</option>
+                          <option>Cotización Enviada</option>
+                          <option>Cotización Aprobada</option>
+                          <option>En Desarrollo</option>
+                          <option>En Desarrollo BI</option>
+                          <option>En Desarrollo Progress</option>
+                          <option>En Desarrollo Salesforce</option>
+                          <option>En Desarrollo SAP</option>
+                          <option>Pruebas Internas</option>
+                          <option>Completado</option>
+                          <option>Facturado</option>
+                          <option>En Pausa (Stand By)</option>
                           <option>Cancelado</option>
-                          <option>En Pausa</option>
                         </select>
                       </div>
                       <div class="fg"><label class="flabel">Portafolio *</label>
@@ -3025,6 +3048,12 @@
                               onchange="updateTechStyle('fti-sap','ft-sap')"> SAP</label>
                           <label class="tech-item" id="fti-salesforce"><input type="checkbox" id="ft-salesforce"
                               onchange="updateTechStyle('fti-salesforce','ft-salesforce')"> Salesforce</label>
+                          <label class="tech-item" id="fti-sgc"><input type="checkbox" id="ft-sgc"
+                              onchange="updateTechStyle('fti-sgc','ft-sgc')"> SGC</label>
+                          <label class="tech-item" id="fti-bissweb"><input type="checkbox" id="ft-bissweb"
+                              onchange="updateTechStyle('fti-bissweb','ft-bissweb')"> Biss Web</label>
+                          <label class="tech-item" id="fti-fabcredito"><input type="checkbox" id="ft-fabcredito"
+                              onchange="updateTechStyle('fti-fabcredito','ft-fabcredito')"> Fábrica de Crédito</label>
                         </div>
                       </div>
                       <div class="fg full"><label class="flabel">Observaciones / notas del sprint</label><input
@@ -3989,6 +4018,9 @@
           sap: !!(getF('Custom.SAP')),
           salesforce: !!(getF('Custom.Salesforce')),
           azure: !!(getF('Custom.Azure')),
+          sgc: !!(getF('Custom.SGC')),
+          bissweb: !!(getF('Custom.BissWeb')),
+          fabcredito: !!(getF('Custom.FabricaCredito')),
         },
         // Guardar todos los campos raw de Azure para debug
         _adoFields: Object.keys(f).length > 0 ? f : undefined,
@@ -4255,6 +4287,9 @@
       setBool('Custom.SAP', 'Custom.SAP');
       setBool('Custom.Salesforce', 'Custom.Salesforce');
       setBool('Custom.Azure', 'Custom.Azure');
+      setBool('Custom.SGC', 'Custom.SGC');
+      setBool('Custom.BissWeb', 'Custom.BissWeb');
+      setBool('Custom.FabricaCredito', 'Custom.FabricaCredito');
       setBool('Custom.BacklogAprobado', 'Custom.BacklogAprobado');
       setBool('Custom.Facturado', 'Custom.Facturado');
 
@@ -4444,6 +4479,9 @@
         add('Custom.SAP', !!ini.tecnologia?.sap);
         add('Custom.Salesforce', !!ini.tecnologia?.salesforce);
         add('Custom.Azure', !!ini.tecnologia?.azure);
+        add('Custom.SGC', !!ini.tecnologia?.sgc);
+        add('Custom.BissWeb', !!ini.tecnologia?.bissweb);
+        add('Custom.FabricaCredito', !!ini.tecnologia?.fabcredito);
       }
 
       // Flags — solo si cambiaron
@@ -5871,7 +5909,18 @@
           { op: 'add', path: '/fields/Custom.RegulatoryChange', value: ini.imp?.[5] || 0 },
           { op: 'add', path: '/fields/Custom.ManagementRequest', value: ini.imp?.[6] || 0 },
           { op: 'add', path: '/fields/Custom.PuntajeTotal', value: ini.score || 0 },
+          { op: 'add', path: '/fields/Custom.Desarrollo', value: !!ini.tecnologia?.desarrollo },
+          { op: 'add', path: '/fields/Custom.DesarrolloWeb', value: !!ini.tecnologia?.web },
+          { op: 'add', path: '/fields/Custom.DesarrolloMobileApps', value: !!ini.tecnologia?.mobile },
+          { op: 'add', path: '/fields/Custom.BI', value: !!ini.tecnologia?.bi },
+          { op: 'add', path: '/fields/Custom.Progress', value: !!ini.tecnologia?.progress },
+          { op: 'add', path: '/fields/Custom.SAP', value: !!ini.tecnologia?.sap },
+          { op: 'add', path: '/fields/Custom.Salesforce', value: !!ini.tecnologia?.salesforce },
+          { op: 'add', path: '/fields/Custom.SGC', value: !!ini.tecnologia?.sgc },
+          { op: 'add', path: '/fields/Custom.BissWeb', value: !!ini.tecnologia?.bissweb },
+          { op: 'add', path: '/fields/Custom.FabricaCredito', value: !!ini.tecnologia?.fabcredito },
         ];
+        if (ini.estado) ops.push({ op: 'add', path: '/fields/System.State', value: ini.estado });
         if (ini.fechaInicio) ops.push({ op: 'add', path: '/fields/Custom.FechaInicioIniciativa', value: ini.fechaInicio });
         if (ini.fechaFin) ops.push({ op: 'add', path: '/fields/Custom.7ab6bae5-8af8-4929-a384-9084ec9005c5', value: ini.fechaFin });
         const res = await fetch(`${ADO.baseUrl}/${encName}/_apis/wit/workitems/$Initiative?api-version=${ADO.apiVersion}`, {
@@ -5988,7 +6037,7 @@
     function tipoLabel(t) { return t === 'ot' ? 'OT' : t === 'sinCotizacion' ? 'S/C' : 'PRY'; }
     function techTags(ini) {
       const t = ini.tecnologia || {};
-      const names = { desarrollo: 'Desarrollo', web: 'Web', mobile: 'Mobile', bi: 'BI', progress: 'Progress', sap: 'SAP', salesforce: 'Salesforce', azure: 'Azure' };
+      const names = { desarrollo: 'Desarrollo', web: 'Web', mobile: 'Mobile', bi: 'BI', progress: 'Progress', sap: 'SAP', salesforce: 'Salesforce', azure: 'Azure', sgc: 'SGC', bissweb: 'Biss Web', fabcredito: 'Fábrica de Crédito' };
       return Object.entries(t).filter(([, v]) => v).map(([k]) => names[k] || k).join(', ') || '—';
     }
     function updateTechStyle(labelId, cbId) {
@@ -6086,7 +6135,7 @@
       let list = iniciativas.filter(i => !i.archived);
       if (q) list = list.filter(i => (i.codigo || '').toLowerCase().includes(q) || (i.nombre || '').toLowerCase().includes(q) || (i.empresa || '').toLowerCase().includes(q));
       if (fc) list = list.filter(i => i.criticidad === fc);
-      if (fe) list = list.filter(i => sg(i.estado) === fe);
+      if (fe) list = list.filter(i => (i.estado || '') === fe);
       if (fpf) list = list.filter(i => i.portfolio === fpf);
       document.getElementById('count-lbl').textContent = `${list.length} proyecto(s)`;
 
@@ -6216,7 +6265,7 @@
     const AREAS = ['Backend', 'Control', 'CRM & CX', 'Finanzas', 'Logística', 'Mercadeo', 'People-Eco', 'Postventa', 'Proyectos', 'Ventas'];
     const LIDERES = ['Diego Juez', 'Edison Godoy', 'Geoconda Cevallos', 'Javier Arias', 'Karla Chiriboga', 'Ramiro Lasso', 'Valeria López'];
     const COMERCIALES = ['Emily Rojas', 'Johan Tarco', 'Karolina Jacome', 'Luis Wandemberg'];
-    const ESTADOS = ['01. Creación del backlog', '02. Backlog enviado', '03. En análisis', '04. Análisis req. horas', '05. Elaboración cotización', '06. Cotización enviada', '07. Cotización Aprobada', '08. En desarrollo', '09. Pruebas internas', '10. Completado', '11. Facturado', 'Cancelado', 'En Pausa'];
+    const ESTADOS = ['New', 'Active', 'Backlog en Elaboración', 'Backlog Enviado', 'Backlog Aprobado', 'En Análisis', 'Estimación Horas', 'Elaboración Cotización', 'Cotización Enviada', 'Cotización Aprobada', 'En Desarrollo', 'En Desarrollo BI', 'En Desarrollo Progress', 'En Desarrollo Salesforce', 'En Desarrollo SAP', 'Pruebas Internas', 'Completado', 'Facturado', 'En Pausa (Stand By)', 'Cancelado'];
 
     let _editImps = [];
     function openEditMode() {
@@ -6436,9 +6485,9 @@
       ['f-emp', 'f-area', 'f-lagil', 'f-lcom', 'f-portfolio'].forEach(id => {
         const el = document.getElementById(id); if (el) el.value = '';
       });
-      document.getElementById('f-est').value = '01. Creación del backlog';
+      document.getElementById('f-est').value = 'New';
       document.getElementById('f-tipo').value = 'proyecto';
-      ['desarrollo', 'web', 'mobile', 'bi', 'progress', 'sap', 'salesforce'].forEach(t => {
+      ['desarrollo', 'web', 'mobile', 'bi', 'progress', 'sap', 'salesforce', 'sgc', 'bissweb', 'fabcredito'].forEach(t => {
         const cbx = document.getElementById('ft-' + t);
         if (cbx) { cbx.checked = false; updateTechStyle('fti-' + t, 'ft-' + t); }
       });
@@ -6498,7 +6547,7 @@
       // Análisis heurístico local (riesgos + backlog inicial sugerido)
       const nom = document.getElementById('f-nom').value || 'la iniciativa';
       const techs = [];
-      ['desarrollo', 'web', 'mobile', 'bi', 'progress', 'sap', 'salesforce'].forEach(t => {
+      ['desarrollo', 'web', 'mobile', 'bi', 'progress', 'sap', 'salesforce', 'sgc', 'bissweb', 'fabcredito'].forEach(t => {
         if (document.getElementById('ft-' + t)?.checked) techs.push(t);
       });
       const riesgos = [
@@ -6522,7 +6571,7 @@
     async function syncDevOps() {
       // Construir la iniciativa desde el formulario
       const tech = {};
-      [['desarrollo', 'desarrollo'], ['web', 'web'], ['mobile', 'mobile'], ['bi', 'bi'], ['progress', 'progress'], ['sap', 'sap'], ['salesforce', 'salesforce']].forEach(([k, id]) => {
+      [['desarrollo', 'desarrollo'], ['web', 'web'], ['mobile', 'mobile'], ['bi', 'bi'], ['progress', 'progress'], ['sap', 'sap'], ['salesforce', 'salesforce'], ['sgc', 'sgc'], ['bissweb', 'bissweb'], ['fabcredito', 'fabcredito']].forEach(([k, id]) => {
         tech[k] = !!document.getElementById('ft-' + id)?.checked;
       });
       const score = cs(_formImps);
