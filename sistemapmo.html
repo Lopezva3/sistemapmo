@@ -6835,125 +6835,233 @@ Estructura requerida:
     // ═══════════════════════════════════════════════════════════════════
     let _exportSelection = {};
 
+    // ═══════════════════════════════════════════════════════════════════
+    //  EXPORT EXCEL — Plantilla de Gerencia (4 hojas) + selección portafolio
+    // ═══════════════════════════════════════════════════════════════════
+    let _exportPf = '';   // '', 'cluster', 'otros'
+
     function openExportModal() {
-      _exportSelection = {};
-      iniciativas.filter(i => !i.archived).forEach(i => _exportSelection[i.id] = true);
+      _exportPf = '';
       const body = document.getElementById('export-modal-body');
       body.innerHTML = `
-        <div style="font-size:15px;font-weight:700;color:#2E2248;margin-bottom:4px">Exportar a Excel</div>
-        <div style="font-size:11.5px;color:var(--tx3);margin-bottom:12px">Selecciona las iniciativas a incluir en el reporte</div>
-        <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center">
-          <input class="finput" id="export-q" placeholder="Filtrar..." oninput="filterExportList()" style="flex:1">
-          <button class="btn btn-default btn-sm" onclick="exportSelectAll(true)">✓ Todo</button>
-          <button class="btn btn-default btn-sm" onclick="exportSelectAll(false)">✗ Ninguno</button>
+        <div style="font-size:16px;font-weight:700;color:#2E2248;margin-bottom:4px">Exportar a Excel</div>
+        <div style="font-size:12px;color:var(--tx3);margin-bottom:16px">Genera el reporte con la plantilla de gerencia (Priorización, Sin cotización, OTs y Cumplimiento)</div>
+
+        <div style="font-size:11px;font-weight:700;color:#4F3A6B;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">1. Portafolio a exportar</div>
+        <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:18px">
+          <label class="exp-pf-opt" onclick="setExportPf('')">
+            <input type="radio" name="exp-pf" value="" checked style="accent-color:#4F3A6B">
+            <div><b>Todos los portafolios</b><div style="font-size:10.5px;color:var(--tx3)">Cluster Automotriz + Otros Clientes</div></div>
+          </label>
+          <label class="exp-pf-opt" onclick="setExportPf('cluster')">
+            <input type="radio" name="exp-pf" value="cluster" style="accent-color:#4F3A6B">
+            <div><b>Cluster Automotriz</b></div>
+          </label>
+          <label class="exp-pf-opt" onclick="setExportPf('otros')">
+            <input type="radio" name="exp-pf" value="otros" style="accent-color:#4F3A6B">
+            <div><b>Otros Clientes</b></div>
+          </label>
         </div>
-        <div id="export-list" style="flex:1;overflow-y:auto;max-height:46vh;border:1px solid var(--border);border-radius:8px"></div>
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px">
-          <span style="font-size:11.5px;color:var(--tx3)" id="export-count"></span>
-          <div style="display:flex;gap:8px">
-            <button class="btn btn-default btn-sm" onclick="closeExportModal()">Cancelar</button>
-            <button class="btn btn-primary btn-sm" onclick="exportExcelSelected()">⬇ Exportar Excel</button>
-          </div>
-        </div>`;
-      filterExportList();
+
+        <div id="exp-summary" style="font-size:11.5px;color:var(--tx2);background:#f4f2f9;border:1px solid #ddd9ea;border-radius:8px;padding:10px 13px;margin-bottom:16px"></div>
+
+        <div style="display:flex;justify-content:flex-end;gap:8px">
+          <button class="btn btn-default btn-sm" onclick="closeExportModal()">Cancelar</button>
+          <button class="btn btn-primary btn-sm" onclick="exportExcelPlantilla()">⬇ Exportar Excel</button>
+        </div>
+        <style>
+          .exp-pf-opt{display:flex;align-items:center;gap:11px;padding:11px 13px;border:1.5px solid var(--border2);border-radius:9px;cursor:pointer;transition:all .12s}
+          .exp-pf-opt:hover{border-color:#4F3A6B;background:#faf9fd}
+        </style>`;
+      updateExportSummary();
       document.getElementById('export-modal').classList.add('show');
     }
     function closeExportModal() { document.getElementById('export-modal').classList.remove('show'); }
-    function filterExportList() {
-      const q = (document.getElementById('export-q')?.value || '').toLowerCase();
+    function setExportPf(pf) { _exportPf = pf; updateExportSummary(); }
+    function updateExportSummary() {
       let list = iniciativas.filter(i => !i.archived);
-      if (q) list = list.filter(i => (i.codigo || '').toLowerCase().includes(q) || (i.nombre || '').toLowerCase().includes(q) || (i.empresa || '').toLowerCase().includes(q));
-      document.getElementById('export-list').innerHTML = list.map(i => `
-        <label style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid #f0edf6;cursor:pointer;font-size:12px">
-          <input type="checkbox" ${_exportSelection[i.id] ? 'checked' : ''} onchange="_exportSelection[${i.id}]=this.checked;updateExportCount()" style="accent-color:#4F3A6B">
-          <span style="font-family:'JetBrains Mono',monospace;color:#4F3A6B;font-weight:700;width:80px">${escapeHtml(i.codigo || '—')}</span>
-          <span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(i.empresa || '')} · ${escapeHtml(i.nombre || '')}</span>
-          <span class="badge ${cb(i.criticidad)}">${(i.criticidad || '').toUpperCase()}</span>
-        </label>`).join('') || '<div style="padding:20px;text-align:center;color:var(--tx3);font-size:12px">Sin resultados</div>';
-      updateExportCount();
-    }
-    function exportSelectAll(v) {
-      iniciativas.filter(i => !i.archived).forEach(i => _exportSelection[i.id] = v);
-      filterExportList();
-    }
-    function updateExportCount() {
-      const n = Object.values(_exportSelection).filter(Boolean).length;
-      const el = document.getElementById('export-count');
-      if (el) el.textContent = `${n} iniciativa(s) seleccionada(s)`;
+      if (_exportPf) list = list.filter(i => i.portfolio === _exportPf);
+      const proyectos = list.filter(i => (i.tipoItem || 'proyecto') === 'proyecto').length;
+      const sinCot = list.filter(i => i.tipoItem === 'sinCotizacion').length;
+      const ots = list.filter(i => i.tipoItem === 'ot').length;
+      const el = document.getElementById('exp-summary');
+      if (el) el.innerHTML = `Se exportarán <b>${list.length}</b> iniciativa(s): ${proyectos} proyecto(s), ${sinCot} sin cotización, ${ots} OT(s).<br>4 hojas: Priorización · Iniciativas sin cotización · OTs · Cumplimiento.`;
     }
 
-    async function exportExcelSelected() {
-      const list = iniciativas.filter(i => !i.archived && _exportSelection[i.id]);
-      if (!list.length) { toast('Selecciona al menos una iniciativa'); return; }
+    // Colores de la plantilla (morados corporativos)
+    const XL_MOR = 'FF4F3A6B', XL_MOR_D = 'FF2E2248', XL_LIL = 'FFEAE7F2';
+    const XL_ALTA = 'FFC0392B', XL_MEDIA = 'FFE67E22', XL_BAJA = 'FF7A9E3B', XL_MUYALTA = 'FF8B1A1A';
+
+    function xlCritColor(c) {
+      c = (c || '').toLowerCase();
+      if (c === 'muy alta') return XL_MUYALTA;
+      if (c === 'alta') return XL_ALTA;
+      if (c === 'media') return XL_MEDIA;
+      return XL_BAJA;
+    }
+    function xlFmtDate(d) {
+      if (!d) return '';
+      const s = String(d).slice(0, 10);
+      return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : (d || '');
+    }
+    function xlTech(ini, key) { return ini.tecnologia && ini.tecnologia[key] ? 'x' : ''; }
+    function xlPmo(ini) {
+      // Iniciales del Líder Ágil (columna PMO en la plantilla)
+      return pmoInitials(ini.liderAgil || '');
+    }
+
+    // Estilos reutilizables
+    function xlStyleTitle(cell, span) {
+      cell.font = { bold: true, size: 13, color: { argb: 'FFFFFFFF' } };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: XL_MOR_D } };
+      cell.alignment = { vertical: 'middle', horizontal: 'center' };
+    }
+    function xlStyleHeader(row) {
+      row.eachCell(c => {
+        c.font = { bold: true, size: 10, color: { argb: 'FFFFFFFF' } };
+        c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: XL_MOR } };
+        c.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+        c.border = { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } };
+      });
+    }
+    function xlStyleDataRow(row, idx) {
+      row.eachCell(c => {
+        c.font = { size: 10 };
+        c.alignment = { vertical: 'middle', wrapText: false };
+        c.border = { top: { style: 'hair' }, bottom: { style: 'hair' }, left: { style: 'hair' }, right: { style: 'hair' } };
+        if (idx % 2 === 1) c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: XL_LIL } };
+      });
+    }
+
+    async function exportExcelPlantilla() {
+      let base = iniciativas.filter(i => !i.archived);
+      if (_exportPf) base = base.filter(i => i.portfolio === _exportPf);
+      if (!base.length) { toast('No hay iniciativas para exportar en ese portafolio'); return; }
       closeExportModal();
       toast('Generando Excel...');
       try {
         const wb = new ExcelJS.Workbook();
         wb.creator = 'PMO Intake Accelerator';
-        const MOR = 'FF4F3A6B', MOR_D = 'FF2E2248', LIL = 'FFEAE7F2';
-        const ws = wb.addWorksheet('Portafolio', { views: [{ state: 'frozen', ySplit: 2 }] });
+        const pfTxt = _exportPf === 'cluster' ? 'Cluster Automotriz' : _exportPf === 'otros' ? 'Otros Clientes' : 'Todos los Portafolios';
+        const hoy = new Date().toLocaleDateString('es-EC');
 
-        // Título
-        ws.mergeCells('A1:N1');
-        const t = ws.getCell('A1');
-        t.value = `PORTAFOLIO DE INICIATIVAS — EOS Tech Company · ${new Date().toLocaleDateString('es-EC')}`;
-        t.font = { bold: true, size: 13, color: { argb: 'FFFFFFFF' } };
-        t.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: MOR_D } };
-        t.alignment = { vertical: 'middle', horizontal: 'center' };
-        ws.getRow(1).height = 26;
+        // Columnas de tecnología (incluye los 3 nuevos)
+        const TECHS = [
+          ['desarrollo', 'Desarrollo'], ['web', 'Desarrollo Web'], ['mobile', 'Desarrollo Mobile (Apps)'],
+          ['bi', 'BI'], ['progress', 'Progress'], ['sap', 'SAP'], ['salesforce', 'Salesforce'],
+          ['sgc', 'SGC'], ['bissweb', 'Biss Web'], ['fabcredito', 'Fábrica de Crédito']
+        ];
 
-        const headers = ['Código IPS', 'Empresa', 'Proyecto', 'Portafolio', 'Sprint', 'Estado', 'Líder Ágil', 'Líder Comercial', 'Puntaje', 'Criticidad', 'Horas Plan.', 'Costo Plan. (USD)', 'Fecha Inicio', 'Fecha Fin'];
-        const hr = ws.addRow(headers);
-        hr.eachCell(c => {
-          c.font = { bold: true, size: 10, color: { argb: 'FFFFFFFF' } };
-          c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: MOR } };
-          c.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
-          c.border = { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } };
-        });
-        ws.getRow(2).height = 22;
+        const proyectos = base.filter(i => (i.tipoItem || 'proyecto') === 'proyecto').sort((a, b) => (b.score || 0) - (a.score || 0));
+        const sinCot = base.filter(i => i.tipoItem === 'sinCotizacion').sort((a, b) => (b.score || 0) - (a.score || 0));
+        const ots = base.filter(i => i.tipoItem === 'ot').sort((a, b) => (b.score || 0) - (a.score || 0));
 
-        list.sort((a, b) => (b.score || 0) - (a.score || 0)).forEach((i, idx) => {
-          const r = ws.addRow([
-            i.codigo || '', i.empresa || '', i.nombre || '', pfLabel(i.portfolio), i.sprintLabel || '',
-            i.estado || '', i.liderAgil || '', i.liderCom || '',
-            Number((i.score || 0).toFixed(2)), i.criticidad || '',
-            i.horas ?? '', i.costoPlanificado ?? i.costo ?? '', i.fechaInicio || '', i.fechaFin || ''
+        // ═══════════ HOJA 1: PRIORIZACIÓN ═══════════
+        const ws1 = wb.addWorksheet('Priorización', { views: [{ state: 'frozen', ySplit: 2 }] });
+        const cols1 = ['Cod.', 'Cliente', 'Nombre del Proyecto', 'PMO', 'Fecha Inicio', 'Fecha Fin', 'Esfuerzo (Horas)',
+          ...TECHS.map(t => t[1]), 'Priorizado', 'Sprint del Proyecto', 'Sprint del Portafolio',
+          'Unidades Incrementales (PBIs)', 'Observaciones'];
+        ws1.mergeCells(1, 1, 1, cols1.length);
+        const t1 = ws1.getCell(1, 1);
+        t1.value = `PORTAFOLIO DE INICIATIVAS — EOS Tech Company · ${pfTxt} · ${hoy}`;
+        xlStyleTitle(t1); ws1.getRow(1).height = 26;
+        xlStyleHeader(ws1.addRow(cols1)); ws1.getRow(2).height = 30;
+        proyectos.forEach((i, idx) => {
+          const r = ws1.addRow([
+            i.codigo || '', i.empresa || '', i.nombre || '', xlPmo(i),
+            xlFmtDate(i.fechaInicio), xlFmtDate(i.fechaFin), i.horas ?? '',
+            ...TECHS.map(t => xlTech(i, t[0])),
+            i.criticidad || '', '', '', '', i.observaciones || ''
           ]);
-          r.eachCell(c => {
-            c.font = { size: 10 };
-            c.border = { top: { style: 'hair' }, bottom: { style: 'hair' }, left: { style: 'hair' }, right: { style: 'hair' } };
-            if (idx % 2 === 1) c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: LIL } };
-          });
-          // Criticidad coloreada
-          const cc = r.getCell(10);
-          const crit = i.criticidad;
-          cc.font = { bold: true, size: 10, color: { argb: 'FFFFFFFF' } };
-          cc.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: crit === 'Alta' ? 'FFC0392B' : crit === 'Media' ? 'FFE67E22' : 'FF7A9E3B' } };
-          cc.alignment = { horizontal: 'center' };
-          r.getCell(9).numFmt = '0.00';
-          r.getCell(12).numFmt = '#,##0.00';
+          xlStyleDataRow(r, idx);
+          // Priorizado coloreado (columna después de las tecnologías)
+          const pc = r.getCell(8 + TECHS.length);
+          pc.font = { bold: true, size: 10, color: { argb: 'FFFFFFFF' } };
+          pc.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: xlCritColor(i.criticidad) } };
+          pc.alignment = { horizontal: 'center' };
+          // Centrar tecnología
+          for (let ti = 0; ti < TECHS.length; ti++) r.getCell(8 + ti).alignment = { horizontal: 'center' };
         });
-        ws.columns = [{ width: 12 }, { width: 15 }, { width: 38 }, { width: 17 }, { width: 11 }, { width: 22 }, { width: 17 }, { width: 17 }, { width: 9 }, { width: 11 }, { width: 11 }, { width: 15 }, { width: 12 }, { width: 12 }];
+        ws1.columns = [{ width: 11 }, { width: 15 }, { width: 40 }, { width: 7 }, { width: 13 }, { width: 13 }, { width: 11 },
+          ...TECHS.map(() => ({ width: 9 })), { width: 11 }, { width: 16 }, { width: 16 }, { width: 16 }, { width: 40 }];
 
-        // Hoja de impulsores
-        const ws2 = wb.addWorksheet('Impulsores');
-        const hr2 = ws2.addRow(['Código', 'Proyecto', ...IMPS, 'Puntaje']);
-        hr2.eachCell(c => {
-          c.font = { bold: true, size: 10, color: { argb: 'FFFFFFFF' } };
-          c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: MOR } };
-          c.alignment = { horizontal: 'center', wrapText: true };
+        // ═══════════ HOJA 2: INICIATIVAS SIN COTIZACIÓN ═══════════
+        const ws2 = wb.addWorksheet('Iniciativas sin cotización', { views: [{ state: 'frozen', ySplit: 2 }] });
+        const cols2 = ['Cod.', 'Cliente', 'Nombre Iniciativa', 'PMO', 'Fecha Inicio', 'Fecha Fin', 'Esfuerzo',
+          ...TECHS.map(t => t[1]), 'Sprint del Proyecto', 'Sprint del Portafolio', 'Observaciones'];
+        ws2.mergeCells(1, 1, 1, cols2.length);
+        const t2 = ws2.getCell(1, 1);
+        t2.value = `INICIATIVAS SIN COTIZACIÓN · ${pfTxt} · ${hoy}`;
+        xlStyleTitle(t2); ws2.getRow(1).height = 26;
+        xlStyleHeader(ws2.addRow(cols2)); ws2.getRow(2).height = 30;
+        sinCot.forEach((i, idx) => {
+          const r = ws2.addRow([
+            i.codigo || '', i.empresa || '', i.nombre || '', xlPmo(i),
+            xlFmtDate(i.fechaInicio), xlFmtDate(i.fechaFin), i.horas ?? '',
+            ...TECHS.map(t => xlTech(i, t[0])), '', '', i.observaciones || ''
+          ]);
+          xlStyleDataRow(r, idx);
+          for (let ti = 0; ti < TECHS.length; ti++) r.getCell(8 + ti).alignment = { horizontal: 'center' };
         });
-        list.forEach(i => {
-          const r = ws2.addRow([i.codigo || '', i.nombre || '', ...(i.imp || [0, 0, 0, 0, 0, 0, 0]), Number((i.score || 0).toFixed(2))]);
-          r.eachCell(c => c.font = { size: 10 });
+        ws2.columns = [{ width: 11 }, { width: 15 }, { width: 40 }, { width: 7 }, { width: 13 }, { width: 13 }, { width: 10 },
+          ...TECHS.map(() => ({ width: 9 })), { width: 16 }, { width: 16 }, { width: 40 }];
+
+        // ═══════════ HOJA 3: OTs ═══════════
+        const ws3 = wb.addWorksheet('OTs', { views: [{ state: 'frozen', ySplit: 2 }] });
+        const cols3 = ['Cod.', 'Cliente', 'Nombre OT', 'PMO', 'Fecha Inicio', 'Fecha Fin', 'Costo', 'Esfuerzo (Horas)',
+          ...TECHS.map(t => t[1]), 'Priorizado', 'Sprint del Proyecto', 'Sprint del Portafolio',
+          'Unidades Incrementales (PBIs)', 'Observaciones'];
+        ws3.mergeCells(1, 1, 1, cols3.length);
+        const t3 = ws3.getCell(1, 1);
+        t3.value = `ÓRDENES DE TRABAJO (OTs) · ${pfTxt} · ${hoy}`;
+        xlStyleTitle(t3); ws3.getRow(1).height = 26;
+        xlStyleHeader(ws3.addRow(cols3)); ws3.getRow(2).height = 30;
+        ots.forEach((i, idx) => {
+          const r = ws3.addRow([
+            i.codigo || '', i.empresa || '', i.nombre || '', xlPmo(i),
+            xlFmtDate(i.fechaInicio), xlFmtDate(i.fechaFin), i.costoPlanificado ?? i.costo ?? '', i.horas ?? '',
+            ...TECHS.map(t => xlTech(i, t[0])),
+            i.criticidad || '', '', '', '', i.observaciones || ''
+          ]);
+          xlStyleDataRow(r, idx);
+          const pc = r.getCell(9 + TECHS.length);
+          pc.font = { bold: true, size: 10, color: { argb: 'FFFFFFFF' } };
+          pc.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: xlCritColor(i.criticidad) } };
+          pc.alignment = { horizontal: 'center' };
+          for (let ti = 0; ti < TECHS.length; ti++) r.getCell(9 + ti).alignment = { horizontal: 'center' };
         });
-        ws2.columns = [{ width: 12 }, { width: 36 }, ...IMPS.map(() => ({ width: 14 })), { width: 9 }];
+        ws3.columns = [{ width: 11 }, { width: 15 }, { width: 40 }, { width: 7 }, { width: 13 }, { width: 13 }, { width: 12 }, { width: 11 },
+          ...TECHS.map(() => ({ width: 9 })), { width: 11 }, { width: 16 }, { width: 16 }, { width: 16 }, { width: 40 }];
+
+        // ═══════════ HOJA 4: CUMPLIMIENTO ═══════════
+        const ws4 = wb.addWorksheet('Cumplimiento', { views: [{ state: 'frozen', ySplit: 2 }] });
+        const cols4 = ['Cod.', 'Cliente', 'Nombre del Proyecto', 'PMO', 'Priorizado', 'Unidades Incrementales',
+          'Número PBIs', 'Número PBI Entregados', 'Comentarios', 'Imputable', 'Porcentaje Cumplimiento'];
+        ws4.mergeCells(1, 1, 1, cols4.length);
+        const t4 = ws4.getCell(1, 1);
+        t4.value = `CUMPLIMIENTO · ${pfTxt} · ${hoy}`;
+        xlStyleTitle(t4); ws4.getRow(1).height = 26;
+        xlStyleHeader(ws4.addRow(cols4)); ws4.getRow(2).height = 30;
+        proyectos.forEach((i, idx) => {
+          const r = ws4.addRow([
+            i.codigo || '', i.empresa || '', i.nombre || '', xlPmo(i),
+            i.criticidad || '', '', '', '', '', '', ''
+          ]);
+          xlStyleDataRow(r, idx);
+          const pc = r.getCell(5);
+          pc.font = { bold: true, size: 10, color: { argb: 'FFFFFFFF' } };
+          pc.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: xlCritColor(i.criticidad) } };
+          pc.alignment = { horizontal: 'center' };
+        });
+        ws4.columns = [{ width: 11 }, { width: 15 }, { width: 40 }, { width: 7 }, { width: 11 }, { width: 20 },
+          { width: 12 }, { width: 15 }, { width: 30 }, { width: 14 }, { width: 15 }];
 
         const buf = await wb.xlsx.writeBuffer();
         const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        a.download = `PMO_Portafolio_${new Date().toISOString().slice(0, 10)}.xlsx`;
+        const pfFile = _exportPf === 'cluster' ? 'Cluster' : _exportPf === 'otros' ? 'OtrosClientes' : 'Todos';
+        a.download = `Priorizacion_Sprint_${pfFile}_${new Date().toISOString().slice(0, 10)}.xlsx`;
         a.click();
         URL.revokeObjectURL(a.href);
         toast('Excel exportado ✓');
