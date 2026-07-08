@@ -6249,13 +6249,6 @@
               <span></span><span></span>
               <span style="font-size:11px;color:#4F3A6B;font-weight:600">Abrir →</span>
             </div>
-            <div class="ini-child-row" onclick="event.stopPropagation();openDetail(${ini.id})">
-              <span class="ini-child-dot"></span>
-              <span class="ini-child-name">Ver ficha de la iniciativa (impulsores, costos, sprint)</span>
-              <span></span><span></span><span></span>
-              <span style="font-size:11px;color:#4F3A6B;font-weight:600">Detalle →</span>
-            </div>
-            <div class="proj-addini" onclick="event.stopPropagation();_wsIni={...iniciativas.find(x=>x.id===${ini.id})};nuevaIniciativaEnProyecto()">＋ Nueva iniciativa en este proyecto</div>
           </div>` : ''}
         </div>`;
       }).join('');
