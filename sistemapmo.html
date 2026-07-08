@@ -2925,21 +2925,31 @@
                       <div class="fg"><label class="flabel">Empresa cliente *</label>
                         <select class="fselect" id="f-emp">
                           <option value="">Seleccionar</option>
-                          <option>ARMCOL</option>
+                          <option>AEKIA</option>
                           <option>ARMACAR</option>
+                          <option>ARMCOL</option>
                           <option>ASIACAR</option>
                           <option>ASIAUTO</option>
                           <option>AUTOCOM</option>
                           <option>AUTOEASTERN</option>
-                          <option>AUTOPLEX</option>
                           <option>AYMESA</option>
                           <option>CLUSTER</option>
                           <option>COCHEZ</option>
+                          <option>CORP. ELJURI</option>
+                          <option>EOS</option>
+                          <option>EQUIFAX</option>
+                          <option>FINANSERVICES</option>
+                          <option>FUND. OSWALDO LOOR</option>
+                          <option>KMOTOR</option>
+                          <option>LOCALIZA</option>
+                          <option>METROCAR</option>
                           <option>METROKIA</option>
                           <option>NEOHYUNDAI</option>
                           <option>NIHON</option>
+                          <option>PRODUBANCO</option>
                           <option>QUICKLINK</option>
                           <option>QUITO MOTORS</option>
+                          <option>TPC</option>
                           <option>VENEKIA</option>
                         </select>
                       </div>
@@ -2964,6 +2974,7 @@
                       <div class="fg"><label class="flabel">Líder Ágil</label>
                         <select class="fselect" id="f-lagil">
                           <option value="">Seleccionar</option>
+                          <option>César Burbano</option>
                           <option>Diego Juez</option>
                           <option>Edison Godoy</option>
                           <option>Geoconda Cevallos</option>
@@ -5379,6 +5390,20 @@
       'Custom.Azure': 'Azure',
       'Custom.BacklogAprobado': 'Backlog aprobado',
       'Custom.Facturado': 'Facturado',
+      'Custom.SGC': 'SGC',
+      'Custom.BissWeb': 'Biss Web',
+      'Custom.FabricaCredito': 'Fábrica de Crédito',
+      'Custom.FechaAprobacionBacklog': 'Fecha Aprobación Backlog',
+      'Custom.FechaAprobacionCotizacion': 'Fecha Aprobación Cotización',
+      'Custom.ROIEstimadoUSD': 'ROI Estimado (USD)',
+      'Custom.GerenteEstrategico': 'Gerente Estratégico de Portafolio',
+      'Custom.AreaEjecucion': 'Área de Ejecución',
+      'Custom.CotizacionAprobada': 'Cotización Aprobada',
+      'Custom.Facturado50Inicial': 'Facturado 50% Inicial',
+      'Custom.Facturado50Cierre': 'Facturado 50% Cierre',
+      'Custom.FechaFinReal': 'Fecha Fin Real',
+      'Custom.HorasReales': 'Horas Reales',
+      'Custom.Criticidad': 'Criticidad',
     };
 
     const IMP_REFS = [
@@ -5392,16 +5417,19 @@
     ];
     const IMP_WEIGHTS = [0.20, 0.20, 0.15, 0.15, 0.15, 0.10, 0.05];
     const WI_AUTO_FIELDS = ['Custom.PuntajeTotal'];  // calculados, solo lectura
-    const WI_BOOL_REFS = ['Custom.Desarrollo', 'Custom.DesarrolloWeb', 'Custom.DesarrolloMobileApps', 'Custom.BI', 'Custom.Progress', 'Custom.SAP', 'Custom.Salesforce', 'Custom.Azure', 'Custom.BacklogAprobado', 'Custom.Facturado'];
+    const WI_BOOL_REFS = ['Custom.Desarrollo', 'Custom.DesarrolloWeb', 'Custom.DesarrolloMobileApps', 'Custom.BI', 'Custom.Progress', 'Custom.SAP', 'Custom.Salesforce', 'Custom.Azure', 'Custom.SGC', 'Custom.BissWeb', 'Custom.FabricaCredito', 'Custom.BacklogAprobado', 'Custom.Facturado', 'Custom.CotizacionAprobada', 'Custom.Facturado50Inicial', 'Custom.Facturado50Cierre'];
 
     const WI_SECTIONS = {
       'Initiative': [
-        { title: 'General', refs: ['System.Title', 'System.State', 'System.AssignedTo', 'System.Description'] },
-        { title: 'Cliente & Liderazgo', refs: ['Custom.EmpresaCliente', 'Custom.Solicitante', 'Custom.CodigoIniciativa', 'Custom.348058e8-e5a7-434a-8c16-bb2a8412245a', 'Custom.cdeeba73-e6b2-48fb-a1d2-2d8f54e4454a', 'Custom.094b5e70-1640-4542-89de-0d35a2458c38'] },
-        { title: 'Planificación & Costos', refs: ['Custom.HorasPlanificadas', 'Custom.CostoPlanificado', 'Custom.CostoReal', 'Custom.EstimatedCost', 'Custom.PresupuestoEstimado', 'Custom.FechaInicioIniciativa', 'Custom.7ab6bae5-8af8-4929-a384-9084ec9005c5', 'Custom.FechaInicioReal'] },
-        { title: 'Impulsores de Cartera (auto-calcula Puntaje y Criticidad)', refs: IMP_REFS.concat(['Custom.PuntajeTotal']) },
-        { title: 'Tecnología', refs: ['Custom.Desarrollo', 'Custom.DesarrolloWeb', 'Custom.DesarrolloMobileApps', 'Custom.BI', 'Custom.Progress', 'Custom.SAP', 'Custom.Salesforce', 'Custom.Azure'] },
-        { title: 'Flags', refs: ['Custom.BacklogAprobado', 'Custom.Facturado'] },
+        { title: 'Información General', refs: ['System.Title', 'System.State', 'System.Description', 'Custom.CodigoIniciativa', 'Custom.EmpresaCliente', 'Custom.Solicitante', 'Custom.094b5e70-1640-4542-89de-0d35a2458c38', 'Custom.348058e8-e5a7-434a-8c16-bb2a8412245a', 'Custom.cdeeba73-e6b2-48fb-a1d2-2d8f54e4454a', 'Custom.FechaAprobacionBacklog', 'Custom.FechaAprobacionCotizacion'] },
+        { title: 'Evaluación Financiera', refs: ['Custom.EstimatedCost', 'Custom.PresupuestoEstimado', 'Custom.ROIEstimadoUSD'] },
+        { title: 'Clasificación', refs: ['Custom.GerenteEstrategico'] },
+        { title: 'Priorización (Impulsores → Puntaje auto)', refs: IMP_REFS.concat(['Custom.PuntajeTotal', 'Custom.Criticidad']) },
+        { title: 'Costo', refs: ['Custom.CostoPlanificado', 'Custom.CostoReal'] },
+        { title: 'Seguimiento', refs: ['Custom.AreaEjecucion', 'Custom.BacklogAprobado', 'Custom.CotizacionAprobada', 'Custom.Facturado50Inicial', 'Custom.Facturado50Cierre'] },
+        { title: 'Tiempo', refs: ['Custom.FechaInicioIniciativa', 'Custom.7ab6bae5-8af8-4929-a384-9084ec9005c5', 'Custom.FechaInicioReal', 'Custom.FechaFinReal'] },
+        { title: 'Esfuerzo', refs: ['Custom.HorasPlanificadas', 'Custom.HorasReales'] },
+        { title: 'Tecnología / Plataforma', refs: ['Custom.Desarrollo', 'Custom.DesarrolloWeb', 'Custom.DesarrolloMobileApps', 'Custom.BI', 'Custom.Progress', 'Custom.SAP', 'Custom.Salesforce', 'Custom.Azure', 'Custom.SGC', 'Custom.BissWeb', 'Custom.FabricaCredito'] },
       ],
       'Epic': [
         { title: 'General', refs: ['System.Title', 'System.State', 'System.AssignedTo', 'System.Description'] },
@@ -5479,6 +5507,22 @@
         const states = WI_STATES[_wiEd.type] || ['New', 'Active', 'Closed'];
         const cur = val || 'New';
         const opts = [...new Set([cur, ...states])].map(s => `<option ${s === cur ? 'selected' : ''}>${s}</option>`).join('');
+        return `<div class="wi-field"><label>${label}</label><select id="${id}">${opts}</select></div>`;
+      }
+      // Dropdowns con listas fijas de Azure (Empresa, Líder Ágil, Líder Comercial, Área, Criticidad)
+      const WI_DROPDOWNS = {
+        'Custom.EmpresaCliente': EMPRESAS,
+        'Custom.348058e8-e5a7-434a-8c16-bb2a8412245a': LIDERES,       // Líder Ágil
+        'Custom.cdeeba73-e6b2-48fb-a1d2-2d8f54e4454a': COMERCIALES,   // Líder Comercial
+        'Custom.094b5e70-1640-4542-89de-0d35a2458c38': AREAS,         // Área Cliente
+        'Custom.Criticidad': CRITICIDADES,
+      };
+      if (WI_DROPDOWNS[ref]) {
+        const list = WI_DROPDOWNS[ref];
+        const cur = val || '';
+        const opts = ['<option value="">— Seleccionar —</option>']
+          .concat([...new Set([...(cur ? [cur] : []), ...list])].map(s => `<option ${s === cur ? 'selected' : ''}>${escapeHtml(s)}</option>`))
+          .join('');
         return `<div class="wi-field"><label>${label}</label><select id="${id}">${opts}</select></div>`;
       }
       // Impulsores → select 0-5
@@ -6261,9 +6305,10 @@
     }
 
     // ── Editar ficha ────────────────────────────────────────────────────
-    const EMPRESAS = ['ARMCOL', 'ARMACAR', 'ASIACAR', 'ASIAUTO', 'AUTOCOM', 'AUTOEASTERN', 'AUTOPLEX', 'AYMESA', 'CLUSTER', 'COCHEZ', 'METROKIA', 'NEOHYUNDAI', 'NIHON', 'QUICKLINK', 'QUITO MOTORS', 'VENEKIA'];
+    const EMPRESAS = ['AEKIA', 'ARMACAR', 'ARMCOL', 'ASIACAR', 'ASIAUTO', 'AUTOCOM', 'AUTOEASTERN', 'AYMESA', 'CLUSTER', 'COCHEZ', 'CORP. ELJURI', 'EOS', 'EQUIFAX', 'FINANSERVICES', 'FUND. OSWALDO LOOR', 'KMOTOR', 'LOCALIZA', 'METROCAR', 'METROKIA', 'NEOHYUNDAI', 'NIHON', 'PRODUBANCO', 'QUICKLINK', 'QUITO MOTORS', 'TPC', 'VENEKIA'];
     const AREAS = ['Backend', 'Control', 'CRM & CX', 'Finanzas', 'Logística', 'Mercadeo', 'People-Eco', 'Postventa', 'Proyectos', 'Ventas'];
-    const LIDERES = ['Diego Juez', 'Edison Godoy', 'Geoconda Cevallos', 'Javier Arias', 'Karla Chiriboga', 'Ramiro Lasso', 'Valeria López'];
+    const LIDERES = ['César Burbano', 'Diego Juez', 'Edison Godoy', 'Geoconda Cevallos', 'Javier Arias', 'Karla Chiriboga', 'Ramiro Lasso', 'Valeria López'];
+    const CRITICIDADES = ['Alta', 'Baja', 'Media', 'Muy alta'];
     const COMERCIALES = ['Emily Rojas', 'Johan Tarco', 'Karolina Jacome', 'Luis Wandemberg'];
     const ESTADOS = ['New', 'Active', 'Backlog en Elaboración', 'Backlog Enviado', 'Backlog Aprobado', 'En Análisis', 'Estimación Horas', 'Elaboración Cotización', 'Cotización Enviada', 'Cotización Aprobada', 'En Desarrollo', 'En Desarrollo BI', 'En Desarrollo Progress', 'En Desarrollo Salesforce', 'En Desarrollo SAP', 'Pruebas Internas', 'Completado', 'Facturado', 'En Pausa (Stand By)', 'Cancelado'];
 
