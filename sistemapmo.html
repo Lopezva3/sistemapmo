@@ -6839,53 +6839,90 @@ Estructura requerida:
     //  EXPORT EXCEL — Plantilla de Gerencia (4 hojas) + selección portafolio
     // ═══════════════════════════════════════════════════════════════════
     let _exportPf = '';   // '', 'cluster', 'otros'
+    let _exportSel = {};  // { id: true } proyectos seleccionados
 
     function openExportModal() {
       _exportPf = '';
+      _exportSel = {};
+      iniciativas.filter(i => !i.archived).forEach(i => _exportSel[i.id] = true);
       const body = document.getElementById('export-modal-body');
       body.innerHTML = `
         <div style="font-size:16px;font-weight:700;color:#2E2248;margin-bottom:4px">Exportar a Excel</div>
-        <div style="font-size:12px;color:var(--tx3);margin-bottom:16px">Genera el reporte con la plantilla de gerencia (Priorización, Sin cotización, OTs y Cumplimiento)</div>
+        <div style="font-size:12px;color:var(--tx3);margin-bottom:14px">Plantilla de gerencia (Priorización · Sin cotización · OTs · Cumplimiento)</div>
 
-        <div style="font-size:11px;font-weight:700;color:#4F3A6B;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">1. Portafolio a exportar</div>
-        <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:18px">
-          <label class="exp-pf-opt" onclick="setExportPf('')">
-            <input type="radio" name="exp-pf" value="" checked style="accent-color:#4F3A6B">
-            <div><b>Todos los portafolios</b><div style="font-size:10.5px;color:var(--tx3)">Cluster Automotriz + Otros Clientes</div></div>
-          </label>
-          <label class="exp-pf-opt" onclick="setExportPf('cluster')">
-            <input type="radio" name="exp-pf" value="cluster" style="accent-color:#4F3A6B">
-            <div><b>Cluster Automotriz</b></div>
-          </label>
-          <label class="exp-pf-opt" onclick="setExportPf('otros')">
-            <input type="radio" name="exp-pf" value="otros" style="accent-color:#4F3A6B">
-            <div><b>Otros Clientes</b></div>
-          </label>
+        <div style="font-size:11px;font-weight:700;color:#4F3A6B;text-transform:uppercase;letter-spacing:.04em;margin-bottom:7px">1. Filtrar por portafolio</div>
+        <div style="display:flex;gap:8px;margin-bottom:14px">
+          <button class="exp-pf-btn active" id="exp-pf-all" onclick="setExportPf('')">Todos</button>
+          <button class="exp-pf-btn" id="exp-pf-cluster" onclick="setExportPf('cluster')">Cluster Automotriz</button>
+          <button class="exp-pf-btn" id="exp-pf-otros" onclick="setExportPf('otros')">Otros Clientes</button>
         </div>
 
-        <div id="exp-summary" style="font-size:11.5px;color:var(--tx2);background:#f4f2f9;border:1px solid #ddd9ea;border-radius:8px;padding:10px 13px;margin-bottom:16px"></div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px">
+          <span style="font-size:11px;font-weight:700;color:#4F3A6B;text-transform:uppercase;letter-spacing:.04em">2. Elegir proyectos</span>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-default btn-sm" onclick="exportSelAll(true)">✓ Todo</button>
+            <button class="btn btn-default btn-sm" onclick="exportSelAll(false)">✗ Ninguno</button>
+          </div>
+        </div>
+        <input class="finput" id="exp-q" placeholder="Buscar por código, cliente o proyecto..." oninput="renderExportList()" style="margin-bottom:8px">
+        <div id="exp-list" style="max-height:38vh;overflow-y:auto;border:1px solid var(--border);border-radius:8px;margin-bottom:12px"></div>
+
+        <div id="exp-summary" style="font-size:11.5px;color:var(--tx2);background:#f4f2f9;border:1px solid #ddd9ea;border-radius:8px;padding:9px 12px;margin-bottom:14px"></div>
 
         <div style="display:flex;justify-content:flex-end;gap:8px">
           <button class="btn btn-default btn-sm" onclick="closeExportModal()">Cancelar</button>
           <button class="btn btn-primary btn-sm" onclick="exportExcelPlantilla()">⬇ Exportar Excel</button>
         </div>
         <style>
-          .exp-pf-opt{display:flex;align-items:center;gap:11px;padding:11px 13px;border:1.5px solid var(--border2);border-radius:9px;cursor:pointer;transition:all .12s}
-          .exp-pf-opt:hover{border-color:#4F3A6B;background:#faf9fd}
+          .exp-pf-btn{flex:1;padding:9px 10px;border:1.5px solid var(--border2);border-radius:8px;background:#fff;cursor:pointer;font-family:inherit;font-size:12px;font-weight:600;color:var(--tx2);transition:all .12s}
+          .exp-pf-btn:hover{border-color:#4F3A6B;background:#faf9fd}
+          .exp-pf-btn.active{background:#4F3A6B;border-color:#4F3A6B;color:#fff}
         </style>`;
-      updateExportSummary();
+      renderExportList();
       document.getElementById('export-modal').classList.add('show');
     }
     function closeExportModal() { document.getElementById('export-modal').classList.remove('show'); }
-    function setExportPf(pf) { _exportPf = pf; updateExportSummary(); }
-    function updateExportSummary() {
+    function setExportPf(pf) {
+      _exportPf = pf;
+      ['all', 'cluster', 'otros'].forEach(k => {
+        const el = document.getElementById('exp-pf-' + k);
+        if (el) el.classList.toggle('active', (k === 'all' && pf === '') || k === pf);
+      });
+      renderExportList();
+    }
+    function exportListFiltered() {
+      const q = (document.getElementById('exp-q')?.value || '').toLowerCase();
       let list = iniciativas.filter(i => !i.archived);
       if (_exportPf) list = list.filter(i => i.portfolio === _exportPf);
-      const proyectos = list.filter(i => (i.tipoItem || 'proyecto') === 'proyecto').length;
-      const sinCot = list.filter(i => i.tipoItem === 'sinCotizacion').length;
-      const ots = list.filter(i => i.tipoItem === 'ot').length;
+      if (q) list = list.filter(i => (i.codigo || '').toLowerCase().includes(q) || (i.nombre || '').toLowerCase().includes(q) || (i.empresa || '').toLowerCase().includes(q));
+      return list.sort((a, b) => (b.score || 0) - (a.score || 0));
+    }
+    function renderExportList() {
+      const list = exportListFiltered();
+      const cont = document.getElementById('exp-list');
+      if (!cont) return;
+      cont.innerHTML = list.length ? list.map(i => `
+        <label style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid #f0edf6;cursor:pointer;font-size:12px">
+          <input type="checkbox" ${_exportSel[i.id] ? 'checked' : ''} onchange="_exportSel[${i.id}]=this.checked;updateExportSummary()" style="accent-color:#4F3A6B">
+          <span style="font-family:'JetBrains Mono',monospace;color:#4F3A6B;font-weight:700;width:82px">${escapeHtml(i.codigo || '—')}</span>
+          <span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(i.empresa || '')} · ${escapeHtml(i.nombre || '')}</span>
+          <span class="badge ${cb(i.criticidad)}">${(i.criticidad || '').toUpperCase()}</span>
+        </label>`).join('') : '<div style="padding:22px;text-align:center;color:var(--tx3);font-size:12px">Sin resultados</div>';
+      updateExportSummary();
+    }
+    function exportSelAll(v) {
+      exportListFiltered().forEach(i => _exportSel[i.id] = v);
+      renderExportList();
+    }
+    function updateExportSummary() {
+      // Solo cuenta los seleccionados dentro del portafolio filtrado
+      let sel = iniciativas.filter(i => !i.archived && _exportSel[i.id]);
+      if (_exportPf) sel = sel.filter(i => i.portfolio === _exportPf);
+      const proyectos = sel.filter(i => (i.tipoItem || 'proyecto') === 'proyecto').length;
+      const sinCot = sel.filter(i => i.tipoItem === 'sinCotizacion').length;
+      const ots = sel.filter(i => i.tipoItem === 'ot').length;
       const el = document.getElementById('exp-summary');
-      if (el) el.innerHTML = `Se exportarán <b>${list.length}</b> iniciativa(s): ${proyectos} proyecto(s), ${sinCot} sin cotización, ${ots} OT(s).<br>4 hojas: Priorización · Iniciativas sin cotización · OTs · Cumplimiento.`;
+      if (el) el.innerHTML = `Se exportarán <b>${sel.length}</b> iniciativa(s) seleccionada(s): ${proyectos} proyecto(s), ${sinCot} sin cotización, ${ots} OT(s).`;
     }
 
     // Colores de la plantilla (morados corporativos)
@@ -6934,9 +6971,9 @@ Estructura requerida:
     }
 
     async function exportExcelPlantilla() {
-      let base = iniciativas.filter(i => !i.archived);
+      let base = iniciativas.filter(i => !i.archived && _exportSel[i.id]);
       if (_exportPf) base = base.filter(i => i.portfolio === _exportPf);
-      if (!base.length) { toast('No hay iniciativas para exportar en ese portafolio'); return; }
+      if (!base.length) { toast('Selecciona al menos un proyecto para exportar'); return; }
       closeExportModal();
       toast('Generando Excel...');
       try {
