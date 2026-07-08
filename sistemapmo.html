@@ -5515,6 +5515,7 @@
         'Custom.348058e8-e5a7-434a-8c16-bb2a8412245a': LIDERES,       // Líder Ágil
         'Custom.cdeeba73-e6b2-48fb-a1d2-2d8f54e4454a': COMERCIALES,   // Líder Comercial
         'Custom.094b5e70-1640-4542-89de-0d35a2458c38': AREAS,         // Área Cliente
+        'Custom.AreaEjecucion': AREAS_EJECUCION,
         'Custom.Criticidad': CRITICIDADES,
       };
       if (WI_DROPDOWNS[ref]) {
@@ -5540,8 +5541,9 @@
         const plain = String(val).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
         return `<div class="wi-field full"><label>${label}</label><textarea id="${id}">${escapeHtml(plain)}</textarea></div>`;
       }
-      // Fechas
-      if (/fecha|date/i.test(ref)) {
+      // Fechas (por nombre o por GUID conocido de fecha)
+      const WI_DATE_REFS = ['Custom.7ab6bae5-8af8-4929-a384-9084ec9005c5']; // Fecha Fin Planificada (GUID)
+      if (/fecha|date/i.test(ref) || WI_DATE_REFS.includes(ref)) {
         const d = String(val).slice(0, 10);
         return `<div class="wi-field"><label>${label}</label><input type="date" id="${id}" value="${d}"></div>`;
       }
@@ -5571,7 +5573,7 @@
       document.getElementById('wi-ed-body').innerHTML = html;
       document.getElementById('wi-ed-footer').innerHTML = `
         <button class="btn btn-default btn-sm" onclick="closeWiEditor()">Cancelar</button>
-        <button class="btn btn-primary btn-sm" onclick="saveWiEditor()">💾 Guardar en Azure</button>`;
+        <button class="btn btn-primary btn-sm" onclick="saveWiEditor()">Guardar</button>`;
     }
 
     async function saveWiEditor() {
@@ -6309,6 +6311,7 @@
     const AREAS = ['Backend', 'Control', 'CRM & CX', 'Finanzas', 'Logística', 'Mercadeo', 'People-Eco', 'Postventa', 'Proyectos', 'Ventas'];
     const LIDERES = ['César Burbano', 'Diego Juez', 'Edison Godoy', 'Geoconda Cevallos', 'Javier Arias', 'Karla Chiriboga', 'Ramiro Lasso', 'Valeria López'];
     const CRITICIDADES = ['Alta', 'Baja', 'Media', 'Muy alta'];
+    const AREAS_EJECUCION = ['BA', 'Cliente', 'Comercial', 'Desarrollo', 'Implementación & Soporte', 'Integración & Progress', 'Proveedor', 'Proyectos', 'QA', 'Seguridad'];
     const COMERCIALES = ['Emily Rojas', 'Johan Tarco', 'Karolina Jacome', 'Luis Wandemberg'];
     const ESTADOS = ['New', 'Active', 'Backlog en Elaboración', 'Backlog Enviado', 'Backlog Aprobado', 'En Análisis', 'Estimación Horas', 'Elaboración Cotización', 'Cotización Enviada', 'Cotización Aprobada', 'En Desarrollo', 'En Desarrollo BI', 'En Desarrollo Progress', 'En Desarrollo Salesforce', 'En Desarrollo SAP', 'Pruebas Internas', 'Completado', 'Facturado', 'En Pausa (Stand By)', 'Cancelado'];
 
@@ -6346,8 +6349,8 @@
       renderEditImps();
       document.getElementById('panel-footer').innerHTML = `
         <button class="btn btn-default btn-sm" onclick="renderDetailView();editMode=false">Cancelar</button>
-        <button class="btn btn-primary btn-sm" onclick="saveEdit(false)">💾 Guardar</button>
-        <button class="btn btn-success btn-sm" onclick="saveEdit(true)">💾 Guardar + Sync Azure</button>`;
+        <button class="btn btn-primary btn-sm" onclick="saveEdit(false)">Guardar</button>
+        <button class="btn btn-success btn-sm" onclick="saveEdit(true)">Guardar + Sync Azure</button>`;
     }
     function renderEditImps() {
       const cont = document.getElementById('e-imp-rows');
