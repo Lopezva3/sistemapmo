@@ -2627,6 +2627,35 @@
     </div>
   </div>
 
+  <!-- ════ COMPONER CORREO AL PMO ════ -->
+  <div id="mailcompose-modal" class="az-modal-bg">
+    <div style="background:#fff;border-radius:14px;padding:24px;width:600px;max-height:90vh;overflow:auto;box-shadow:0 24px 80px rgba(0,0,0,.25)">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#4F3A6B" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+        <div style="font-size:16px;font-weight:700;color:#2E2248">Enviar propuesta al PMO</div>
+      </div>
+      <div style="font-size:12px;color:var(--tx3);margin-bottom:16px">Revisa y edita el mensaje antes de enviarlo. Se abrirá tu correo para el envío final.</div>
+
+      <div style="margin-bottom:12px">
+        <label style="font-size:11px;font-weight:700;color:#4F3A6B;text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:5px">Para</label>
+        <div id="mailc-to" style="font-size:13px;color:var(--tx2);background:#f4f2f9;border:1px solid #ddd9ea;border-radius:8px;padding:9px 12px"></div>
+      </div>
+      <div style="margin-bottom:12px">
+        <label style="font-size:11px;font-weight:700;color:#4F3A6B;text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:5px">Asunto</label>
+        <input class="finput" id="mailc-subject" style="width:100%">
+      </div>
+      <div style="margin-bottom:16px">
+        <label style="font-size:11px;font-weight:700;color:#4F3A6B;text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:5px">Mensaje</label>
+        <textarea id="mailc-body" style="width:100%;min-height:280px;font-family:inherit;font-size:13px;line-height:1.6;padding:12px;border:1px solid var(--border);border-radius:8px;resize:vertical"></textarea>
+      </div>
+
+      <div style="display:flex;justify-content:flex-end;gap:8px">
+        <button class="btn btn-default btn-sm" onclick="closeMailCompose()">Cancelar</button>
+        <button class="btn btn-primary btn-sm" onclick="sendMailCompose()">Abrir correo y enviar</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ════ WORKSPACE DE PROYECTO (tipo Azure) ════ -->
   <div id="ws-modal" class="ws-bg">
     <div class="ws-modal ws-full">
@@ -2766,7 +2795,7 @@
           </svg>
           <span>Exportar Excel</span>
         </button>
-        <button class="nav-btn" onclick="showApiKeyModal(null)">
+        <button class="nav-btn admin-only" onclick="showApiKeyModal(null)">
           <svg viewBox="0 0 24 24">
             <circle cx="12" cy="12" r="3" />
             <path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14" />
@@ -3440,6 +3469,10 @@
                   <svg viewBox="0 0 24 24" width="12" height="12"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
                   Enviar propuesta
                 </button>
+                <button class="btn btn-info btn-sm" id="prop-email-btn" onclick="enviarPropuestaCorreo()" disabled style="display:flex;align-items:center;gap:5px">
+                  <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                  Enviar al PMO
+                </button>
               </div>
             </div>
             <div id="prop-initiatives-list" style="max-height:450px;overflow-y:auto"></div>
@@ -3866,9 +3899,58 @@
       return h;
     }
 
-    // ── Fetch genérico con manejo de errores ───────────────────────────
+    // ── Renovación silenciosa del token (evita tener que desloguearse) ──
+    let _refreshingToken = null;  // promesa en curso, para no renovar 2 veces a la vez
+    async function refreshAzureToken() {
+      // Si ya hay una renovación en curso, esperar esa misma
+      if (_refreshingToken) return _refreshingToken;
+      _refreshingToken = (async () => {
+        try {
+          const raw = localStorage.getItem(AUTH_STORAGE);
+          if (!raw) return false;
+          const user = JSON.parse(raw);
+          if (!user.refreshToken) return false;  // sin refresh token no se puede renovar
+          const cfg = getAzConfig();
+          const body = new URLSearchParams({
+            client_id: cfg.clientId,
+            grant_type: 'refresh_token',
+            refresh_token: user.refreshToken,
+            scope: 'openid profile email offline_access https://app.vssps.visualstudio.com/user_impersonation',
+            redirect_uri: cfg.redirectUri,
+          });
+          const res = await fetch(`https://login.microsoftonline.com/${cfg.tenantId}/oauth2/v2.0/token`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: body.toString(),
+          });
+          if (!res.ok) { console.warn('Refresh token falló:', res.status); return false; }
+          const data = await res.json();
+          user.accessToken = data.access_token;
+          if (data.refresh_token) user.refreshToken = data.refresh_token;
+          localStorage.setItem(AUTH_STORAGE, JSON.stringify(user));
+          ADO._cachedToken = data.access_token;
+          console.log('Token de Azure renovado silenciosamente ✓');
+          return true;
+        } catch (err) {
+          console.error('Error al renovar token:', err);
+          return false;
+        } finally {
+          _refreshingToken = null;
+        }
+      })();
+      return _refreshingToken;
+    }
+
+    // ── Fetch genérico con manejo de errores y auto-renovación de token ──
     async function adoFetch(url, opts = {}) {
-      const res = await fetch(url, { headers: adoHeaders(opts.contentType), ...opts });
+      let res = await fetch(url, { headers: adoHeaders(opts.contentType), ...opts });
+      // Si el token venció (401/203), renovar y reintentar UNA vez
+      if ((res.status === 401 || res.status === 203) && !opts._retried) {
+        const ok = await refreshAzureToken();
+        if (ok) {
+          return adoFetch(url, { ...opts, _retried: true });
+        }
+      }
       if (!res.ok) {
         const err = await res.text().catch(() => '');
         throw new Error(`ADO ${res.status}: ${err.slice(0, 200)}`);
@@ -4115,6 +4197,9 @@
     // ════════════════════════════════════════════════════════════════════
     async function adoLoadAllProjects() {
       showAdoStatus('Conectando con Azure DevOps...', 'loading');
+      // Renovar el token proactivamente para evitar el error de sesión vencida
+      // (así no hay que desloguearse/volver a entrar cuando el token ya caducó)
+      await refreshAzureToken().catch(() => null);
       const diag = { total: 0, ips: 0, pages: 0, ctReadable: false, names: [] };
       try {
         // ── 1. Lista de TODOS los proyectos, con paginación robusta ───────
@@ -4123,7 +4208,12 @@
         do {
           const pageUrl = `${ADO.baseUrl}/_apis/projects?api-version=${ADO.apiVersion}&$top=500&stateFilter=all`
             + (contToken ? `&continuationToken=${encodeURIComponent(contToken)}` : '');
-          const res = await fetch(pageUrl, { headers: adoHeaders() });
+          let res = await fetch(pageUrl, { headers: adoHeaders() });
+          // Si el token venció justo ahora, renovar y reintentar una vez
+          if ((res.status === 401 || res.status === 203)) {
+            const ok = await refreshAzureToken();
+            if (ok) res = await fetch(pageUrl, { headers: adoHeaders() });
+          }
           if (!res.ok) {
             const t = await res.text().catch(() => '');
             throw new Error(`Proyectos HTTP ${res.status}: ${t.slice(0, 160)}`);
@@ -6058,7 +6148,7 @@
     const STORAGE_KEY = 'pmoInitiativas_v2';
     const SPRINT_KEY = 'pmoSprintData_v2';
     const PROPOSALS_KEY = 'pmo_proposals_v1';
-    const ADMIN_NAMES = ['ramiro lasso', 'valeria', 'david'];
+    const ADMIN_EMAILS = ['valeria.lopez@inpsercom.com', 'ramiro.lasso@inpsercom.com'];
 
     let iniciativas = [];
     let sprintData = {
@@ -6139,12 +6229,16 @@
     function isAdmin() {
       const raw = localStorage.getItem(AUTH_STORAGE);
       if (!raw) return false;
-      const name = (JSON.parse(raw).name || '').toLowerCase();
-      return ADMIN_NAMES.some(a => name.includes(a));
+      const email = (JSON.parse(raw).email || '').toLowerCase().trim();
+      return ADMIN_EMAILS.includes(email);
     }
     function currentUserName() {
       const raw = localStorage.getItem(AUTH_STORAGE);
       return raw ? (JSON.parse(raw).name || 'Usuario') : 'Usuario';
+    }
+    function currentUserEmail() {
+      const raw = localStorage.getItem(AUTH_STORAGE);
+      return raw ? (JSON.parse(raw).email || '') : '';
     }
 
     // ── Reglas de priorización ───────────────────────────────────────────
@@ -7187,8 +7281,60 @@ Estructura requerida:
     }
     function updatePropBtn() {
       const n = Object.entries(_propSelection).filter(([, v]) => v).length;
+      const disabled = n === 0 || !document.getElementById('prop-portfolio').value;
       const btn = document.getElementById('prop-submit-btn');
-      if (btn) btn.disabled = n === 0 || !document.getElementById('prop-portfolio').value;
+      if (btn) btn.disabled = disabled;
+      const ebtn = document.getElementById('prop-email-btn');
+      if (ebtn) ebtn.disabled = disabled;
+    }
+
+    // Enviar la propuesta por correo al PMO (abre el cliente de correo con el mensaje listo)
+    const PMO_EMAIL = 'ramiro.lasso@inpsercom.com';   // PMO que recibe las propuestas
+    const PMO_NOMBRE = 'Ramiro Lasso';
+
+    function enviarPropuestaCorreo() {
+      const pf = document.getElementById('prop-portfolio').value;
+      const sprint = document.getElementById('prop-sprint').value;
+      const ids = Object.entries(_propSelection).filter(([, v]) => v).map(([k]) => parseInt(k));
+      if (!pf || !ids.length) { toast('Selecciona portafolio e iniciativas'); return; }
+
+      const pfTxt = pfLabel(pf);
+      const items = ids.map(iid => iniciativas.find(x => x.id === iid)).filter(Boolean)
+        .sort((a, b) => (b.score || 0) - (a.score || 0));
+
+      // Lista de proyectos para incluir en el mensaje
+      let lista = '';
+      items.forEach((i, idx) => {
+        lista += `${idx + 1}. ${i.codigo || ''} — ${i.empresa || ''} · ${i.nombre || ''} (Puntaje: ${(i.score || 0).toFixed(2)}, ${i.criticidad || '—'})\n`;
+      });
+
+      // Mensaje con la plantilla (editable por el usuario antes de enviar)
+      const mensajePlantilla =
+`Estimado ${PMO_NOMBRE}:
+
+Me permito compartir la propuesta de algunos proyectos orientados a optimizar procesos y generar mejoras dentro del área. Considero que estas iniciativas pueden aportar valor y contribuir al cumplimiento de nuestros objetivos.
+
+Proyectos propuestos (${pfTxt}${sprint ? ' · ' + sprint : ''}):
+${lista}
+Quedo atento/a a sus comentarios y a la oportunidad de revisarlos en mayor detalle.
+
+Saludos cordiales,
+${currentUserName()}`;
+
+      // Abrir ventana editable
+      document.getElementById('mailc-to').textContent = PMO_EMAIL;
+      document.getElementById('mailc-subject').value = `Propuesta de Priorización — ${pfTxt}${sprint ? ' · ' + sprint : ''}`;
+      document.getElementById('mailc-body').value = mensajePlantilla;
+      document.getElementById('mailcompose-modal').classList.add('show');
+    }
+    function closeMailCompose() { document.getElementById('mailcompose-modal').classList.remove('show'); }
+    function sendMailCompose() {
+      const subject = document.getElementById('mailc-subject').value;
+      const body = document.getElementById('mailc-body').value;
+      const mailto = `mailto:${PMO_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+      window.location.href = mailto;
+      closeMailCompose();
+      toast('Abriendo tu correo con la propuesta...');
     }
     function submitProposal() {
       const pf = document.getElementById('prop-portfolio').value;
@@ -7199,6 +7345,7 @@ Estructura requerida:
       props.push({
         id: Date.now(),
         pm: currentUserName(),
+        pmEmail: currentUserEmail(),
         portfolio: pf,
         sprint,
         status: 'pending',
@@ -7294,6 +7441,7 @@ Estructura requerida:
       updateBandejaBadge();
       renderBandeja();
       toast('Propuesta aprobada ✓ — sprint asignado a las iniciativas');
+      notificarDecisionPM(p, 'aprobada');
     }
     function rejectProposal(propId) {
       const props = loadProposals();
@@ -7303,6 +7451,35 @@ Estructura requerida:
       updateBandejaBadge();
       renderBandeja();
       toast('Propuesta rechazada');
+      notificarDecisionPM(p, 'rechazada');
+    }
+
+    // Abrir correo al PM avisando la decisión (aprobada / rechazada)
+    function notificarDecisionPM(p, decision) {
+      if (!p.pmEmail) { toast('La propuesta no tiene correo del PM registrado'); return; }
+      const pfTxt = pfLabel(p.portfolio);
+      const aprob = decision === 'aprobada';
+      const asunto = `Propuesta de Priorización ${aprob ? 'APROBADA' : 'NO APROBADA'} — ${pfTxt}${p.sprint ? ' · ' + p.sprint : ''}`;
+      let lista = '';
+      p.items.forEach((it, idx) => { lista += `${idx + 1}. ${it.codigo || ''} — ${it.nombre || ''}\n`; });
+      let cuerpo =
+`Estimado/a ${p.pm || 'PM'}:
+
+Le informo que su propuesta de priorización ha sido ${aprob ? 'APROBADA' : 'RECHAZADA'}.
+
+Portafolio: ${pfTxt}
+Sprint: ${p.sprint || '(por definir)'}
+Proyectos:
+${lista}
+${aprob
+  ? 'Los proyectos han sido asignados al sprint indicado. Puede continuar con la planificación.'
+  : 'Por el momento estos proyectos no fueron priorizados. Quedo atento/a para conversar los detalles.'}
+
+Saludos cordiales,
+${currentUserName()}
+Administrador PMO — EOS Tech Company`;
+      const mailto = `mailto:${p.pmEmail}?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`;
+      window.location.href = mailto;
     }
 
     // ═══════════════ INIT ═══════════════
