@@ -2073,6 +2073,22 @@
 
     /* ── Proposal & Approval system ── */
     .admin-only { display: none }
+    .ia-type-card {
+      flex: 1; display: flex; gap: 12px; padding: 15px 16px;
+      border: 2px solid var(--border2); border-radius: 11px; cursor: pointer;
+      transition: all .14s; background: #fff;
+    }
+    .ia-type-card:hover { border-color: #4F3A6B; background: #faf9fd }
+    .ia-type-card.active { border-color: #4F3A6B; background: #EAE7F2; box-shadow: 0 2px 12px rgba(79,58,107,.12) }
+    .ia-type-icon { font-size: 26px; line-height: 1 }
+    .ia-type-title { font-size: 13.5px; font-weight: 700; color: #2E2248; margin-bottom: 3px }
+    .ia-type-desc { font-size: 11px; color: var(--tx3); line-height: 1.5 }
+    .ia-proj-row {
+      display: flex; align-items: center; gap: 11px; padding: 10px 13px;
+      border-bottom: 1px solid #f0edf6; cursor: pointer; font-size: 12.5px; transition: background .1s;
+    }
+    .ia-proj-row:hover { background: #faf9fd }
+    .ia-proj-row.sel { background: #EAE7F2 }
     .app.is-admin .admin-only { display: flex }
     .pm-only { display: flex }
     .app.is-admin .pm-only { display: flex }
@@ -2795,6 +2811,12 @@
           </svg>
           <span>Exportar Excel</span>
         </button>
+        <button class="nav-btn" id="nav-ia" onclick="nav('ia',this)">
+          <svg viewBox="0 0 24 24">
+            <path d="M12 2l1.9 5.8H20l-4.7 3.4 1.8 5.8L12 13.6 6.9 17l1.8-5.8L4 7.8h6.1L12 2z" />
+          </svg>
+          <span>Generador IA</span>
+        </button>
         <button class="nav-btn admin-only" onclick="showApiKeyModal(null)">
           <svg viewBox="0 0 24 24">
             <circle cx="12" cy="12" r="3" />
@@ -3480,6 +3502,47 @@
         </div>
 
         <!-- ════ BANDEJA DE APROBACIÓN (ADMIN) ════ -->
+        <!-- ════ GENERADOR IA (Backlog + Matriz de Riesgos) ════ -->
+        <div class="screen" id="screen-ia">
+          <div class="card" style="margin-bottom:16px">
+            <div class="card-header">
+              <div class="card-title">Generador con IA</div>
+              <span style="font-size:11px;color:var(--tx3)">Selecciona un proyecto y el documento que quieres generar</span>
+            </div>
+            <div style="padding:16px 18px">
+              <div style="display:flex;gap:12px;margin-bottom:16px">
+                <div class="ia-type-card" id="ia-type-backlog" onclick="setIaType('backlog')">
+                  <div class="ia-type-icon">📋</div>
+                  <div>
+                    <div class="ia-type-title">Backlog de Iniciativa</div>
+                    <div class="ia-type-desc">Documento completo: justificación, objetivos SMART, stakeholders, criterios de aceptación, backlog inicial, riesgos, dependencias y KPIs.</div>
+                  </div>
+                </div>
+                <div class="ia-type-card" id="ia-type-riesgos" onclick="setIaType('riesgos')">
+                  <div class="ia-type-icon">⚠️</div>
+                  <div>
+                    <div class="ia-type-title">Matriz de Riesgos</div>
+                    <div class="ia-type-desc">Registro de riesgos: identificación, categoría, probabilidad, impacto, exposición, severidad, plan de respuesta y contingencia.</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="fg" style="margin:0">
+                <label class="flabel">Proyecto</label>
+                <input class="finput" id="ia-q" placeholder="Buscar proyecto por código, cliente o nombre..." oninput="renderIaProjects()" style="margin-bottom:8px">
+                <div id="ia-projects" style="max-height:38vh;overflow-y:auto;border:1px solid var(--border);border-radius:9px"></div>
+              </div>
+
+              <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
+                <button class="btn btn-primary btn-sm" id="ia-gen-btn" onclick="generarDocIA()" disabled style="display:flex;align-items:center;gap:6px">
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l1.9 5.8H20l-4.7 3.4 1.8 5.8L12 13.6 6.9 17l1.8-5.8L4 7.8h6.1L12 2z"/></svg>
+                  Generar con IA
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div class="screen" id="screen-bandeja">
           <div style="margin-bottom:16px;display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px">
             <div>
@@ -6262,6 +6325,7 @@
       archivados: ['Archivados', 'Iniciativas archivadas'],
       proponer: ['Proponer Priorización', 'Propuestas al administrador PMO'],
       bandeja: ['Priorización Sprint', 'Aprobación de propuestas'],
+      ia: ['Generador IA', 'Backlog y Matriz de Riesgos automáticos'],
     };
     function nav(screen, btn) {
       document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -6280,6 +6344,7 @@
       if (screen === 'archivados') renderArchivados();
       if (screen === 'proponer') renderProponer();
       if (screen === 'bandeja') renderBandeja();
+      if (screen === 'ia') renderIaScreen();
     }
 
     // ═══════════════ DASHBOARD (una fila por PROYECTO) ═══════════════
@@ -6872,7 +6937,11 @@
       document.getElementById('bl-overlay').classList.add('open');
       callBacklogAPI(ini);
     }
-    function closeBacklogOverlay() { document.getElementById('bl-overlay').classList.remove('open'); }
+    function closeBacklogOverlay() {
+      document.getElementById('bl-overlay').classList.remove('open');
+      const pdfBtn = document.getElementById('ia-pdf-btn');
+      if (pdfBtn) pdfBtn.remove();
+    }
 
     function buildBacklogPrompt(ini) {
       return `Eres un consultor PMO senior de EOS Tech Company (INPSERCOM S.A.). Genera un documento de backlog profesional EN ESPAÑOL para esta iniciativa:
@@ -7480,6 +7549,283 @@ ${currentUserName()}
 Administrador PMO — EOS Tech Company`;
       const mailto = `mailto:${p.pmEmail}?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`;
       window.location.href = mailto;
+    }
+
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  GENERADOR IA — Backlog de Iniciativa + Matriz de Riesgos
+    // ═══════════════════════════════════════════════════════════════════
+    let _iaType = 'backlog';   // 'backlog' | 'riesgos'
+    let _iaProject = null;     // iniciativa seleccionada
+
+    function renderIaScreen() {
+      setIaType(_iaType);
+      renderIaProjects();
+    }
+    function setIaType(t) {
+      _iaType = t;
+      ['backlog', 'riesgos'].forEach(k => {
+        const el = document.getElementById('ia-type-' + k);
+        if (el) el.classList.toggle('active', k === t);
+      });
+      updateIaBtn();
+    }
+    function renderIaProjects() {
+      const q = (document.getElementById('ia-q')?.value || '').toLowerCase();
+      let list = iniciativas.filter(i => !i.archived);
+      if (q) list = list.filter(i => (i.codigo || '').toLowerCase().includes(q) || (i.nombre || '').toLowerCase().includes(q) || (i.empresa || '').toLowerCase().includes(q));
+      list.sort((a, b) => (a.codigo || '').localeCompare(b.codigo || ''));
+      const cont = document.getElementById('ia-projects');
+      if (!cont) return;
+      cont.innerHTML = list.length ? list.map(i => `
+        <div class="ia-proj-row ${_iaProject && _iaProject.id === i.id ? 'sel' : ''}" onclick="selectIaProject(${i.id})">
+          <input type="radio" name="ia-proj" ${_iaProject && _iaProject.id === i.id ? 'checked' : ''} style="accent-color:#4F3A6B">
+          <span style="font-family:'JetBrains Mono',monospace;color:#4F3A6B;font-weight:700;width:82px">${escapeHtml(i.codigo || '—')}</span>
+          <span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(i.empresa || '')} · ${escapeHtml(i.nombre || '')}</span>
+          <span class="badge ${cb(i.criticidad)}">${(i.criticidad || '').toUpperCase()}</span>
+        </div>`).join('') : '<div style="padding:24px;text-align:center;color:var(--tx3);font-size:12px">Sin proyectos. Usa "Sync Azure" para cargarlos.</div>';
+    }
+    function selectIaProject(id) {
+      _iaProject = iniciativas.find(i => i.id === id) || null;
+      renderIaProjects();
+      updateIaBtn();
+    }
+    function updateIaBtn() {
+      const btn = document.getElementById('ia-gen-btn');
+      if (btn) btn.disabled = !_iaProject;
+    }
+
+    // ── Prompts basados en las plantillas reales de EOS ──────────────────
+    function promptBacklog(ini) {
+      return `Eres un consultor PMO senior de EOS Tech Company (INPSERCOM S.A.). Genera un documento de BACKLOG DE INICIATIVA profesional EN ESPAÑOL siguiendo EXACTAMENTE la plantilla corporativa.
+
+DATOS DEL PROYECTO:
+Código: ${ini.codigo || '—'}
+Empresa cliente: ${ini.empresa || '—'}
+Proyecto: ${ini.nombre || '—'}
+Descripción: ${ini.descripcion || 'No especificada'}
+Solicitante: ${ini.solicitante || '—'}
+Área: ${ini.area || '—'}
+Líder Ágil (PM a cargo): ${ini.liderAgil || '—'}
+Líder Comercial: ${ini.liderCom || '—'}
+Tecnologías: ${techTags(ini)}
+Horas planificadas: ${ini.horas ?? '—'}
+Costo planificado: ${ini.costoPlanificado ?? ini.costo ?? '—'} USD
+Puntaje de priorización: ${(ini.score || 0).toFixed(2)} (Criticidad: ${ini.criticidad || '—'})
+Impulsores de cartera (0-5): ${IMPS.map((n, idx) => `${n}=${ini.imp?.[idx] ?? 0}`).join(', ')}
+Observaciones: ${ini.observaciones || '—'}
+
+Responde SOLO con HTML válido (sin markdown, sin backticks, sin etiquetas html/head/body).
+Usa <h2> para las secciones, <p> para texto, <ul>/<li> para listas y <table> con <thead>/<tbody>/<th>/<td> para tablas.
+
+ESTRUCTURA OBLIGATORIA (las 12 secciones de la plantilla EOS):
+
+<h2>1. Datos generales del cliente</h2>
+Tabla con: Fecha, Empresa cliente, Solicitante, Área, PM a cargo, Líder Comercial, Código de iniciativa.
+
+<h2>2. Justificación del Proyecto</h2>
+Explica la situación actual, los problemas concretos y por qué se necesita el proyecto. Sé específico con los dolores del proceso actual.
+
+<h2>3. Evaluación Estratégica de la Iniciativa</h2>
+Tabla con los 7 impulsores de cartera, su peso y el puntaje asignado, más el puntaje total y la criticidad resultante.
+
+<h2>4. Objetivos SMART</h2>
+Desarrolla cada letra: S (específico), M (medible), A (alcanzable), R (relevante), T (temporal).
+
+<h2>5. Stakeholders Clave</h2>
+Tabla con: Stakeholder | Rol | Interés/Afectación.
+
+<h2>6. Situación deseada</h2>
+Describe el estado objetivo en formato ágil (historias de usuario / features).
+
+<h2>7. Criterios de Aceptación</h2>
+Lista numerada de criterios verificables y concretos.
+
+<h2>8. Desglose del Requerimiento</h2>
+Separa en "Componentes funcionales" y "Componentes no funcionales".
+
+<h2>9. Detalle del Backlog Inicial con Roles Afectados</h2>
+Tabla con: ID | Épica/Feature | Historia de Usuario | Rol involucrado | Prioridad.
+Genera al menos 8 historias de usuario realistas en formato "Como [rol] quiero [acción] para [beneficio]".
+
+<h2>10. Riesgos Identificados</h2>
+Tabla con: Riesgo | Descripción | Impacto potencial.
+
+<h2>11. Dependencias</h2>
+Tabla con: Dependencia | Descripción | Criticidad.
+
+<h2>12. Indicadores de Éxito (KPIs)</h2>
+Tabla con: KPI | Meta | Descripción de cómo se mide.
+
+Sé concreto y profesional. Basa TODO el contenido en los datos reales del proyecto proporcionados arriba.`;
+    }
+
+    function promptRiesgos(ini) {
+      return `Eres un consultor PMO senior de EOS Tech Company (INPSERCOM S.A.), experto en gestión de riesgos de proyectos. Genera una MATRIZ / REGISTRO DE RIESGOS profesional EN ESPAÑOL siguiendo la plantilla corporativa.
+
+DATOS DEL PROYECTO:
+Código: ${ini.codigo || '—'}
+Empresa cliente: ${ini.empresa || '—'}
+Proyecto: ${ini.nombre || '—'}
+Descripción: ${ini.descripcion || 'No especificada'}
+Área: ${ini.area || '—'}
+Líder Ágil (PM): ${ini.liderAgil || '—'}
+Tecnologías: ${techTags(ini)}
+Horas planificadas: ${ini.horas ?? '—'}
+Costo planificado: ${ini.costoPlanificado ?? ini.costo ?? '—'} USD
+Fechas: inicio ${ini.fechaInicio || '—'}, fin ${ini.fechaFin || '—'}
+Criticidad: ${ini.criticidad || '—'} (puntaje ${(ini.score || 0).toFixed(2)})
+Observaciones: ${ini.observaciones || '—'}
+
+Responde SOLO con HTML válido (sin markdown, sin backticks, sin etiquetas html/head/body).
+Usa <h2> para secciones, <p> para texto y <table> con <thead>/<tbody>/<th>/<td>.
+
+ESTRUCTURA OBLIGATORIA:
+
+<h2>Registro de Riesgos — ${ini.codigo || ''} ${ini.nombre || ''}</h2>
+<p>Breve introducción del alcance del análisis de riesgos para este proyecto.</p>
+
+<h2>Matriz de Riesgos</h2>
+Genera una tabla con AL MENOS 10 riesgos realistas y específicos para este proyecto, con estas columnas EXACTAS:
+ID | Nombre del Riesgo | Enunciado o descripción | Categoría | Probabilidad | Impacto | Plazo | Exposición | Severidad | Propietario | Estrategia de Respuesta | Plan de Respuesta | Plan de Contingencia | Estado
+
+REGLAS PARA LOS VALORES (usa EXACTAMENTE estos catálogos):
+- ID: R001, R002, R003...
+- Categoría: Presupuesto | Entorno/Factores Ambientales | Procesos | Recursos | Cronograma | Partes interesadas | Tecnología | Legal | Seguridad de la Información
+- Probabilidad: Bajo | Medio | Alto
+- Impacto: Bajo | Medio | Alto
+- Plazo: Corto | Medio | Largo
+- Exposición: número (Bajo=1, Medio=2, Alto=3; multiplica Probabilidad x Impacto, resultado 1-9)
+- Severidad: Exposición x 3 (valor numérico)
+- Estrategia de Respuesta: Escalar | Aceptar | Evitar/Explotar | Mitigar/Potenciar | Transferir/Compartir | Monitorear
+- Propietario: rol responsable (PM, Líder Desarrollo, Arquitecto de Soluciones, Cliente, etc.)
+- Estado: Abierto
+
+<h2>Resumen de Exposición</h2>
+Tabla resumen: cuántos riesgos hay por nivel de severidad (Alta/Media/Baja) y las 3 principales recomendaciones de mitigación.
+
+Los riesgos deben ser ESPECÍFICOS para este proyecto y sus tecnologías, no genéricos. Piensa como un PMO experimentado: riesgos técnicos, de alcance, de recursos, de cronograma, de integración, de calidad de datos, de dependencias con el cliente, etc.`;
+    }
+
+    // ── Generar documento con la IA ──────────────────────────────────────
+    async function generarDocIA() {
+      if (!_iaProject) { toast('Selecciona un proyecto'); return; }
+      const key = localStorage.getItem(APIKEY_STORAGE);
+      if (!key) { showApiKeyModal(() => generarDocIA()); return; }
+
+      const ini = _iaProject;
+      const esBacklog = _iaType === 'backlog';
+      const titulo = esBacklog ? 'Backlog de Iniciativa' : 'Matriz de Riesgos';
+
+      // Abrir overlay con spinner
+      document.getElementById('bl-topbar-title').textContent = `${titulo} — ${ini.codigo || ''}`;
+      document.getElementById('bl-topbar-sub').textContent = `${ini.empresa || ''} · ${ini.nombre || ''}`;
+      document.getElementById('bl-body').innerHTML = `
+        <div class="bl-loading">
+          <div class="bl-spinner"></div>
+          <div class="bl-loading-msg">Generando ${titulo.toLowerCase()} con IA...</div>
+          <div class="bl-loading-sub">Analizando el proyecto y redactando el documento (20-60 segundos)</div>
+        </div>`;
+      document.getElementById('bl-overlay').classList.add('open');
+
+      try {
+        const res = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': key,
+            'anthropic-version': '2023-06-01',
+            'anthropic-dangerous-direct-browser-access': 'true',
+          },
+          body: JSON.stringify({
+            model: 'claude-sonnet-4-6',
+            max_tokens: 8000,
+            messages: [{ role: 'user', content: esBacklog ? promptBacklog(ini) : promptRiesgos(ini) }],
+          }),
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error.message || 'Error de API');
+        const html = (data.content || []).filter(c => c.type === 'text').map(c => c.text).join('\n')
+          .replace(/```html|```/g, '').trim();
+        renderIaDoc(ini, html, titulo);
+      } catch (err) {
+        document.getElementById('bl-body').innerHTML = `
+          <div class="bl-doc-area"><div class="bl-page"><div class="bl-error">
+            ⚠️ No se pudo generar el documento:<br><b>${escapeHtml(err.message)}</b><br><br>
+            Verifica tu API Key (menú "Configurar API") y tu conexión a internet.
+          </div></div></div>`;
+      }
+    }
+
+    function renderIaDoc(ini, html, titulo) {
+      const today = new Date().toLocaleDateString('es-EC', { year: 'numeric', month: 'long', day: 'numeric' });
+      document.getElementById('bl-body').innerHTML = `
+        <div class="bl-doc-area"><div class="bl-page" id="ia-doc-page">
+          <div class="bl-doc-header">
+            <div class="bl-eos-logo">EOS</div>
+            <div class="bl-doc-meta">
+              <div><b>${escapeHtml(ini.codigo || '')}</b></div>
+              <div>${escapeHtml(ini.empresa || '')}</div>
+              <div>${today}</div>
+            </div>
+          </div>
+          <div class="bl-doc-subtitle">${titulo.toUpperCase()} · ${escapeHtml(ini.nombre || '')}</div>
+          ${html}
+        </div></div>`;
+      // Botón de descarga PDF en la barra
+      const bar = document.querySelector('.bl-topbar-actions');
+      if (bar && !document.getElementById('ia-pdf-btn')) {
+        const btn = document.createElement('button');
+        btn.id = 'ia-pdf-btn';
+        btn.className = 'btn btn-sm';
+        btn.style.cssText = 'background:#fff;color:#4F3A6B;font-weight:600';
+        btn.textContent = '⬇ Descargar PDF';
+        btn.onclick = () => descargarIaPDF(ini, titulo);
+        bar.insertBefore(btn, bar.firstChild);
+      }
+    }
+
+    // ── Descargar el documento como PDF (usa la impresión del navegador) ──
+    function descargarIaPDF(ini, titulo) {
+      const page = document.getElementById('ia-doc-page');
+      if (!page) { toast('No hay documento para descargar'); return; }
+      const w = window.open('', '_blank');
+      if (!w) { toast('Permite las ventanas emergentes para descargar el PDF'); return; }
+      w.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
+        <title>${titulo} - ${ini.codigo || ''}</title>
+        <style>
+          @page { size: A4; margin: 18mm 16mm; }
+          body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 11pt; line-height: 1.55; color: #222; }
+          h2 { color: #2E2248; font-size: 13pt; border-bottom: 2px solid #4F3A6B; padding-bottom: 5px; margin: 22px 0 10px; page-break-after: avoid; }
+          h3 { color: #4F3A6B; font-size: 11.5pt; margin: 14px 0 6px; }
+          table { width: 100%; border-collapse: collapse; margin: 10px 0 16px; font-size: 9.5pt; page-break-inside: avoid; }
+          th { background: #4F3A6B; color: #fff; padding: 7px 8px; text-align: left; border: 1px solid #3d2d54; font-weight: 600; }
+          td { padding: 6px 8px; border: 1px solid #d8d3e5; vertical-align: top; }
+          tr:nth-child(even) td { background: #F5F3F9; }
+          ul, ol { margin: 8px 0 14px 20px; }
+          li { margin-bottom: 4px; }
+          p { margin: 8px 0; text-align: justify; }
+          .doc-head { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #4F3A6B; padding-bottom: 12px; margin-bottom: 6px; }
+          .doc-logo { font-size: 26pt; font-weight: 800; color: #4F3A6B; letter-spacing: 1px; }
+          .doc-meta { text-align: right; font-size: 9pt; color: #666; line-height: 1.5; }
+          .doc-title { font-size: 15pt; font-weight: 700; color: #2E2248; margin: 14px 0 20px; }
+        </style></head><body>
+        <div class="doc-head">
+          <div class="doc-logo">EOS</div>
+          <div class="doc-meta">
+            <div><b>${escapeHtml(ini.codigo || '')}</b></div>
+            <div>${escapeHtml(ini.empresa || '')}</div>
+            <div>${new Date().toLocaleDateString('es-EC')}</div>
+            <div>EOS Tech Company</div>
+          </div>
+        </div>
+        <div class="doc-title">${titulo.toUpperCase()} · ${escapeHtml(ini.nombre || '')}</div>
+        ${page.querySelector('.bl-doc-subtitle') ? '' : ''}
+        ${[...page.children].filter(el => !el.classList.contains('bl-doc-header') && !el.classList.contains('bl-doc-subtitle')).map(el => el.outerHTML).join('')}
+        </body></html>`);
+      w.document.close();
+      setTimeout(() => { w.focus(); w.print(); }, 400);
+      toast('Abriendo diálogo de impresión — elige "Guardar como PDF"');
     }
 
     // ═══════════════ INIT ═══════════════
