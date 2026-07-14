@@ -5630,6 +5630,7 @@
       'Custom.FechaFinReal': 'Fecha Fin Real',
       'Custom.HorasReales': 'Horas Reales',
       'Custom.Criticidad': 'Criticidad',
+      'Custom.Observaciones': 'Observaciones',
     };
 
     const IMP_REFS = [
@@ -5653,6 +5654,7 @@
         { title: 'Priorización (Impulsores → Puntaje auto)', refs: IMP_REFS.concat(['Custom.PuntajeTotal', 'Custom.Criticidad']) },
         { title: 'Costo', refs: ['Custom.CostoPlanificado', 'Custom.CostoReal'] },
         { title: 'Seguimiento', refs: ['Custom.AreaEjecucion', 'Custom.BacklogAprobado', 'Custom.CotizacionAprobada', 'Custom.Facturado50Inicial', 'Custom.Facturado50Cierre'] },
+        { title: 'Observaciones', refs: ['Custom.Observaciones'] },
         { title: 'Tiempo', refs: ['Custom.FechaInicioIniciativa', 'Custom.7ab6bae5-8af8-4929-a384-9084ec9005c5', 'Custom.FechaInicioReal', 'Custom.FechaFinReal'] },
         { title: 'Esfuerzo', refs: ['Custom.HorasPlanificadas', 'Custom.HorasReales'] },
         { title: 'Tecnología / Plataforma', refs: ['Custom.Desarrollo', 'Custom.DesarrolloWeb', 'Custom.DesarrolloMobileApps', 'Custom.BI', 'Custom.Progress', 'Custom.SAP', 'Custom.Salesforce', 'Custom.Azure', 'Custom.SGC', 'Custom.BissWeb', 'Custom.FabricaCredito'] },
@@ -5717,16 +5719,23 @@
     function cssId(ref) { return ref.replace(/[^a-zA-Z0-9]/g, '_'); }
 
     // ── Render de un control según el tipo de campo ─────────────────────
+    // El texto junto al switch refleja el valor (Azure muestra True/False)
+    function wiToggleTxt(cb) {
+      const tx = cb.parentElement?.querySelector('.tx');
+      if (tx) tx.textContent = cb.checked ? 'Sí' : 'No';
+    }
+
     function renderFieldControl(ref, val) {
       const id = 'wif-' + cssId(ref);
       const label = WI_LABELS[ref] || ref;
       if (typeof val === 'object' && val !== null) val = val.displayName || val.name || '';
       if (val === undefined || val === null) val = '';
 
-      // Booleanos → switch
+      // Booleanos → switch (el texto de al lado refleja el valor, como el True/False de Azure)
       if (WI_BOOL_REFS.includes(ref)) {
+        const on = (val === true || val === 'true' || val === 1);
         return `<div class="wi-field"><label>${label}</label>
-          <label class="wi-switch"><input type="checkbox" id="${id}" ${val === true || val === 'true' || val === 1 ? 'checked' : ''}><span class="sl"></span><span class="tx">${label}</span></label></div>`;
+          <label class="wi-switch"><input type="checkbox" id="${id}" ${on ? 'checked' : ''} onchange="wiToggleTxt(this)"><span class="sl"></span><span class="tx">${on ? 'Sí' : 'No'}</span></label></div>`;
       }
       // Estado → select
       if (ref === 'System.State') {
@@ -5763,9 +5772,10 @@
         return `<div class="wi-field"><label>${label} (auto)</label><input id="${id}" value="${escapeAttr(val)}" readonly style="background:#f4f2f9;color:#4F3A6B;font-weight:700"></div>`;
       }
       // Textareas
-      if (ref === 'System.Description' || ref === 'Microsoft.VSTS.Common.AcceptanceCriteria') {
+      if (ref === 'System.Description' || ref === 'Microsoft.VSTS.Common.AcceptanceCriteria' || ref === 'Custom.Observaciones') {
         const plain = String(val).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
-        return `<div class="wi-field full"><label>${label}</label><textarea id="${id}">${escapeHtml(plain)}</textarea></div>`;
+        const alto = ref === 'Custom.Observaciones' ? ' style="min-height:80px"' : '';
+        return `<div class="wi-field full"><label>${label}</label><textarea id="${id}"${alto} placeholder="${ref === 'Custom.Observaciones' ? 'Escribe las observaciones...' : ''}">${escapeHtml(plain)}</textarea></div>`;
       }
       // Fechas (por nombre o por GUID conocido de fecha)
       const WI_DATE_REFS = ['Custom.7ab6bae5-8af8-4929-a384-9084ec9005c5']; // Fecha Fin Planificada (GUID)
@@ -6342,10 +6352,20 @@
           { op: 'add', path: '/fields/Custom.Progress', value: !!ini.tecnologia?.progress },
           { op: 'add', path: '/fields/Custom.SAP', value: !!ini.tecnologia?.sap },
           { op: 'add', path: '/fields/Custom.Salesforce', value: !!ini.tecnologia?.salesforce },
+          { op: 'add', path: '/fields/Custom.Azure', value: !!ini.tecnologia?.azure },
           { op: 'add', path: '/fields/Custom.SGC', value: !!ini.tecnologia?.sgc },
           { op: 'add', path: '/fields/Custom.BissWeb', value: !!ini.tecnologia?.bissweb },
           { op: 'add', path: '/fields/Custom.FabricaCredito', value: !!ini.tecnologia?.fabcredito },
+          { op: 'add', path: '/fields/Custom.Observaciones', value: ini.observaciones || '' },
         ];
+        if (ini.criticidad) ops.push({ op: 'add', path: '/fields/Custom.Criticidad', value: ini.criticidad });
+        if (ini.presupuesto) ops.push({ op: 'add', path: '/fields/Custom.PresupuestoEstimado', value: ini.presupuesto });
+        if (ini.costoReal) ops.push({ op: 'add', path: '/fields/Custom.CostoReal', value: ini.costoReal });
+        if (ini.horasReales) ops.push({ op: 'add', path: '/fields/Custom.HorasReales', value: ini.horasReales });
+        if (ini.gerenteEstrategico) ops.push({ op: 'add', path: '/fields/Custom.GerenteEstrategico', value: ini.gerenteEstrategico });
+        if (ini.areaEjecucion) ops.push({ op: 'add', path: '/fields/Custom.AreaEjecucion', value: ini.areaEjecucion });
+        if (ini.fechaInicioReal) ops.push({ op: 'add', path: '/fields/Custom.FechaInicioReal', value: ini.fechaInicioReal });
+        if (ini.fechaFinReal) ops.push({ op: 'add', path: '/fields/Custom.FechaFinReal', value: ini.fechaFinReal });
         if (ini.estado) ops.push({ op: 'add', path: '/fields/System.State', value: ini.estado });
         if (ini.fechaInicio) ops.push({ op: 'add', path: '/fields/Custom.FechaInicioIniciativa', value: ini.fechaInicio });
         if (ini.fechaFin) ops.push({ op: 'add', path: '/fields/Custom.7ab6bae5-8af8-4929-a384-9084ec9005c5', value: ini.fechaFin });
