@@ -1,4 +1,5 @@
 
+
 <!DOCTYPE html>
 <html lang="es">
 
@@ -2657,7 +2658,12 @@
         <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#4F3A6B" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
         <div style="font-size:16px;font-weight:700;color:#2E2248">Enviar propuesta al PMO</div>
       </div>
-      <div style="font-size:12px;color:var(--tx3);margin-bottom:16px">Revisa y edita el mensaje antes de enviarlo. Se abrirá tu correo para el envío final.</div>
+      <div style="font-size:12px;color:var(--tx3);margin-bottom:12px">Revisa y edita el mensaje antes de enviarlo. Se abrirá tu correo para el envío final.</div>
+
+      <div style="display:flex;align-items:flex-start;gap:9px;background:#EAE7F2;border:1px solid #c8c2dc;border-radius:8px;padding:10px 12px;margin-bottom:16px;font-size:11.5px;color:#2E2248;line-height:1.6">
+        <span style="font-size:14px;line-height:1">📌</span>
+        <div>La propuesta <b>también se registrará automáticamente en “Priorización Sprint”</b>, para que el PMO la apruebe o rechace dentro del sistema. El correo es solo la notificación.</div>
+      </div>
 
       <div style="margin-bottom:12px">
         <label style="font-size:11px;font-weight:700;color:#4F3A6B;text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:5px">Para</label>
@@ -2669,12 +2675,15 @@
       </div>
       <div style="margin-bottom:16px">
         <label style="font-size:11px;font-weight:700;color:#4F3A6B;text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:5px">Mensaje</label>
-        <textarea id="mailc-body" style="width:100%;min-height:280px;font-family:inherit;font-size:13px;line-height:1.6;padding:12px;border:1px solid var(--border);border-radius:8px;resize:vertical"></textarea>
+        <textarea id="mailc-body" style="width:100%;min-height:260px;font-family:inherit;font-size:13px;line-height:1.6;padding:12px;border:1px solid var(--border);border-radius:8px;resize:vertical"></textarea>
       </div>
 
-      <div style="display:flex;justify-content:flex-end;gap:8px">
-        <button class="btn btn-default btn-sm" onclick="closeMailCompose()">Cancelar</button>
-        <button class="btn btn-primary btn-sm" onclick="sendMailCompose()">Abrir correo y enviar</button>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-default btn-sm" onclick="registrarSinCorreo()" title="Registra la propuesta en Priorización Sprint sin abrir el correo">Registrar sin enviar correo</button>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-default btn-sm" onclick="closeMailCompose()">Cancelar</button>
+          <button class="btn btn-primary btn-sm" onclick="sendMailCompose()">Registrar y abrir correo</button>
+        </div>
       </div>
     </div>
   </div>
@@ -3480,6 +3489,9 @@
                   <button class="btn btn-default btn-sm" id="prop-add-sprint" onclick="agregarSprint()" disabled
                     title="Agregar un nuevo sprint a este portafolio"
                     style="white-space:nowrap">+ Sprint</button>
+                  <button class="btn btn-danger btn-sm" id="prop-del-sprint" onclick="eliminarSprint()" disabled
+                    title="Eliminar el sprint seleccionado de este portafolio"
+                    style="white-space:nowrap">− Sprint</button>
                 </div>
               </div>
             </div>
@@ -3493,11 +3505,7 @@
               <div style="display:flex;gap:8px;align-items:center">
                 <button class="btn btn-default btn-sm" onclick="propSelectAll(true)">✓ Todo</button>
                 <button class="btn btn-default btn-sm" onclick="propSelectAll(false)">✗ Ninguno</button>
-                <button class="btn btn-primary btn-sm" id="prop-submit-btn" onclick="submitProposal()" disabled style="display:flex;align-items:center;gap:5px">
-                  <svg viewBox="0 0 24 24" width="12" height="12"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-                  Enviar propuesta
-                </button>
-                <button class="btn btn-info btn-sm" id="prop-email-btn" onclick="enviarPropuestaCorreo()" disabled style="display:flex;align-items:center;gap:5px">
+                <button class="btn btn-primary btn-sm" id="prop-submit-btn" onclick="enviarPropuestaCorreo()" disabled style="display:flex;align-items:center;gap:5px">
                   <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
                   Enviar al PMO
                 </button>
@@ -4103,26 +4111,35 @@
       Object.entries(ADO_FIELD_MAP).map(([k, v]) => [v, k])
     );
 
+    // Empresas conocidas (para detectar el cliente dentro del nombre del proyecto Azure).
+    // Ordenadas de más larga a más corta para que "AUTOEASTERN" no se confunda con "AUTO...".
+    const EMPRESAS_KNOWN = ['NEOHYUNDAI', 'METROKIA', 'ARMACAR', 'ASIAUTO', 'QUICKLINK', 'QUITO MOTORS',
+      'CLUSTER', 'AYMESA', 'AUTOCOM', 'NIHON', 'VENEKIA', 'ASIACAR', 'AUTOEASTERN', 'AUTOPLEX',
+      'ARMCOL', 'COCHEZ', 'AEKIA', 'AUTOEKIA', 'EOS', 'METROCAR', 'KMOTOR', 'LOCALIZA', 'PRODUBANCO',
+      'EQUIFAX', 'FINANSERVICES', 'TPC', 'CORP. ELJURI', 'ELJURI', 'FUND. OSWALDO LOOR', 'APMO']
+      .sort((a, b) => b.length - a.length);
+
     // ── Parsear nombre del proyecto Azure → código, empresa, nombre legible ──
-    // Formato esperado: IPS-XXXX-PRY_EMPRESA_NOMBRE_DEL_PROYECTO
-    // o: IPS-XXXX_EMPRESA_NOMBRE  /  IPS-XXXX-EMPRESA-NOMBRE  etc.
+    // Soporta:  IPS-2114-PRY_NEOHYUNDAI_WEB_COLISIONES   (formato estándar)
+    //           IPS-000-PRY_EOS_PRUEBAS                   (código corto / de pruebas)
+    //           AEKIA Prueba                              (SIN código IPS → codigo = '')
     function parseAdoProjectName(rawName) {
-      // Extraer código: todo lo que empiece con IPS-NNNN
-      const codeMatch = rawName.match(/^(IPS-\d+)/i);
-      const codigo = codeMatch ? codeMatch[1].toUpperCase() : rawName;
+      const name = String(rawName || '').trim();
 
-      // Quitar el código del inicio y separadores
-      let rest = rawName.replace(/^IPS-\d+[-_]?(PRY[-_]?)?/i, '');
-      // Reemplazar _ y - por espacios
+      // Código: acepta IPS-2114, IPS_2114, IPS 2114, IPS2114 o nada
+      const codeMatch = name.match(/^IPS[-_\s]?(\d+)/i);
+      const codigo = codeMatch ? ('IPS-' + codeMatch[1]) : '';   // '' = proyecto sin código IPS
+
+      // Quitar el código del inicio, el separador y el prefijo PRY
+      let rest = codeMatch ? name.slice(codeMatch[0].length) : name;
+      rest = rest.replace(/^[-_\s]+/, '').replace(/^PRY[-_\s]?/i, '');
       rest = rest.replace(/[_\-]+/g, ' ').trim();
+      if (!rest) rest = name.replace(/[_\-]+/g, ' ').trim();
 
-      // Intentar detectar empresa: primera palabra en mayúsculas que coincida con la lista conocida
-      const KNOWN = ['NEOHYUNDAI', 'METROKIA', 'ARMACAR', 'ASIAUTO', 'QUICKLINK', 'QUITO MOTORS',
-        'CLUSTER', 'AYMESA', 'AUTOCOM', 'NIHON', 'VENEKIA', 'ASIACAR', 'AUTOEASTERN', 'AUTOPLEX',
-        'ARMCOL', 'COCHEZ', 'AEKIA', 'AUTOEKIA'];
+      // Detectar empresa dentro del resto del nombre
       let empresa = '';
       let nombre = rest;
-      for (const emp of KNOWN) {
+      for (const emp of EMPRESAS_KNOWN) {
         if (rest.toUpperCase().startsWith(emp)) {
           empresa = emp;
           nombre = rest.slice(emp.length).trim();
@@ -4138,8 +4155,10 @@
         }
       }
       // Capitalizar nombre bonito
-      nombre = nombre.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ').trim() || rawName;
-      empresa = empresa.toUpperCase();
+      nombre = nombre.split(' ').filter(Boolean)
+        .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ').trim()
+        || rest || name;
+      empresa = (empresa || '').toUpperCase();
 
       return { codigo, empresa, nombre };
     }
@@ -4176,8 +4195,15 @@
       ];
 
       const empresa = getF('Custom.EmpresaCliente') || parsed.empresa;
-      const codigoRaw = getF('Custom.CodigoIniciativa') || parsed.codigo;
-      const codigo = codigoRaw ? (codigoRaw.toUpperCase().startsWith('IPS-') ? codigoRaw.toUpperCase() : 'IPS-' + codigoRaw) : parsed.codigo;
+      // El código puede venir del work item (Custom.CodigoIniciativa) o del nombre del proyecto.
+      // Los proyectos sin código IPS (ej. "AEKIA Prueba") quedan con código vacío y se muestran igual.
+      const codigoRaw = String(getF('Custom.CodigoIniciativa') || '').trim();
+      let codigo = parsed.codigo;
+      if (codigoRaw) {
+        codigo = /^IPS[-_\s]?/i.test(codigoRaw)
+          ? codigoRaw.toUpperCase().replace(/^IPS[-_\s]?/i, 'IPS-')
+          : 'IPS-' + codigoRaw;
+      }
       // Usar nombre del title de Azure pero limpiar el nombre del proyecto si no hay WI
       const rawTitle = getF('System.Title') || '';
       const nombre = (rawTitle && rawTitle !== proj.name) ? rawTitle : parsed.nombre;
@@ -4314,16 +4340,18 @@
 
         diag.total = allProjects.length;
         diag.names = allProjects.map(p => p.name);
-        const ipsProjects = allProjects.filter(p => /^IPS-/i.test(p.name));
-        diag.ips = ipsProjects.length;
+        // ⚠️ Se traen TODOS los proyectos de la organización, tengan o no el prefijo "IPS-".
+        // Antes se filtraba por /^IPS-/ y quedaban fuera proyectos válidos como
+        // "AEKIA Prueba" (sin código) o "IPS-000-PRY_EOS_PRUEBAS" (código corto).
+        const ipsProjects = allProjects.slice();
+        diag.ips = allProjects.filter(p => /^IPS-/i.test(p.name)).length;
 
-        // ── DIAGNÓSTICO visible en consola (F12) — para entender "solo salen 5" ──
+        // ── DIAGNÓSTICO visible en consola (F12) ──
         console.group('📊 Diagnóstico carga de proyectos Azure DevOps');
         console.log(`Proyectos TOTALES devueltos por Azure: ${diag.total}`);
-        console.log(`Coinciden con prefijo "IPS-": ${diag.ips}`);
+        console.log(`Con prefijo "IPS-": ${diag.ips} · sin prefijo (se cargan igual): ${diag.total - diag.ips}`);
         console.log(`Páginas leídas: ${diag.pages} · ¿token de continuación legible?: ${diag.ctReadable}`);
         console.log('Nombres de TODOS los proyectos que ve tu token:', diag.names);
-        if (diag.total && !diag.ips) console.warn('⚠️ Ningún proyecto empieza con "IPS-". Revisa el prefijo real arriba.');
         if (diag.total <= 5) console.warn('⚠️ Tu token solo VE ' + diag.total + ' proyectos. Probable tema de permisos del PAT/OAuth (alcance de la organización), no del código.');
         console.groupEnd();
 
@@ -4332,13 +4360,8 @@
           toast('Azure devolvió 0 proyectos · revisa F12');
           return;
         }
-        if (!ipsProjects.length) {
-          showAdoStatus(`Azure devolvió ${diag.total} proyectos, pero NINGUNO empieza con "IPS-". Abre F12 para ver los nombres reales.`, 'warn');
-          toast(`${diag.total} proyectos en Azure, 0 con prefijo IPS- · revisa F12`);
-          return;
-        }
 
-        showAdoStatus(`${diag.total} proyectos en Azure · ${diag.ips} IPS- · cargando datos...`, 'loading');
+        showAdoStatus(`${diag.total} proyectos en Azure (${diag.ips} con código IPS) · cargando datos...`, 'loading');
         showSyncOverlay(0, ipsProjects.length);
 
         // ── 2. Por cada proyecto, traer sus Initiative (portador de campos PMO) ──
@@ -6401,7 +6424,13 @@
         cont.innerHTML = '<div class="arch-empty"><div class="arch-empty-icon">📭</div>Sin proyectos. Usa "Sync Azure" para cargar desde Azure DevOps.</div>';
         return;
       }
-      cont.innerHTML = list.sort((a, b) => (a.codigo || '').localeCompare(b.codigo || '')).map(ini => {
+      // Orden: primero los que tienen código IPS (numérico), y al final los proyectos sin código
+      cont.innerHTML = list.sort((a, b) => {
+        const ca = a.codigo || '', cbo = b.codigo || '';
+        if (!ca && cbo) return 1;
+        if (ca && !cbo) return -1;
+        return ca.localeCompare(cbo, undefined, { numeric: true });
+      }).map(ini => {
         const open = !!_openProjects[ini.id];
         const critCls = cb(ini.criticidad);
         const nIni = ini.wiInitiativeCount || 0;
@@ -7331,20 +7360,32 @@ Estructura requerida:
       if (b) { b.textContent = pending; b.classList.toggle('has-items', pending > 0); }
     }
 
+    // Sprints ordenados de forma natural (Sprint 0, Sprint 1, Sprint 2, ... Sprint 9)
+    function sprintsOrdenados(pf) {
+      const sd = sprintData[pf];
+      if (!sd) return [];
+      return sd.sprints.slice().sort((a, b) =>
+        String(a.label).localeCompare(String(b.label), undefined, { numeric: true, sensitivity: 'base' }));
+    }
+
     function onPropPortfolioChange() {
       const pf = document.getElementById('prop-portfolio').value;
       const sel = document.getElementById('prop-sprint');
       const btnAdd = document.getElementById('prop-add-sprint');
+      const btnDel = document.getElementById('prop-del-sprint');
       if (!pf) {
         sel.disabled = true;
         sel.innerHTML = '<option value="">— Selecciona portafolio —</option>';
         if (btnAdd) btnAdd.disabled = true;
+        if (btnDel) btnDel.disabled = true;
         renderPropInitiatives(); return;
       }
       sel.disabled = false;
       if (btnAdd) btnAdd.disabled = false;
       const sd = sprintData[pf];
-      sel.innerHTML = sd.sprints.map(s => `<option value="${escapeHtml(s.label)}" ${s.id === sd.current ? 'selected' : ''}>${escapeHtml(s.label)}</option>`).join('');
+      const lista = sprintsOrdenados(pf);
+      sel.innerHTML = lista.map(s => `<option value="${escapeHtml(s.label)}" ${s.id === sd.current ? 'selected' : ''}>${escapeHtml(s.label)}</option>`).join('');
+      if (btnDel) btnDel.disabled = lista.length <= 1;   // siempre debe quedar al menos 1 sprint
       renderPropInitiatives();
     }
 
@@ -7365,8 +7406,56 @@ Estructura requerida:
       localStorage.setItem(SPRINT_KEY, JSON.stringify(sprintData));
       onPropPortfolioChange();
       document.getElementById('prop-sprint').value = nombre;
+      refreshSprintFilters();
       updatePropBtn();
       toast(`"${nombre}" agregado a ${pfLabel(pf)} ✓`);
+    }
+
+    // Elimina el sprint seleccionado del portafolio (solo en el sistema PMO, no toca Azure)
+    function eliminarSprint() {
+      const pf = document.getElementById('prop-portfolio').value;
+      const sel = document.getElementById('prop-sprint');
+      const label = sel ? sel.value : '';
+      if (!pf) { toast('Primero selecciona un portafolio'); return; }
+      if (!label) { toast('Selecciona el sprint que quieres eliminar'); return; }
+
+      const sd = sprintData[pf];
+      if (!sd || sd.sprints.length <= 1) { toast('Debe quedar al menos un sprint en el portafolio'); return; }
+      const sp = sd.sprints.find(s => s.label === label);
+      if (!sp) { toast('Sprint no encontrado'); return; }
+
+      const asignadas = iniciativas.filter(i => !i.archived && i.portfolio === pf && i.sprintLabel === label);
+      const pendientes = loadProposals().filter(p => p.portfolio === pf && p.sprint === label && p.status === 'pending');
+
+      let msg = `¿Eliminar "${label}" de ${pfLabel(pf)}?`;
+      if (asignadas.length) msg += `\n\n• ${asignadas.length} iniciativa(s) quedarán SIN sprint asignado.`;
+      if (pendientes.length) msg += `\n• ${pendientes.length} propuesta(s) pendiente(s) quedarán sin sprint destino (podrás reasignarlo en Priorización Sprint).`;
+      msg += '\n\nEsto solo afecta al sistema PMO — no borra nada en Azure DevOps.';
+      if (!confirm(msg)) return;
+
+      // Quitar el sprint
+      sd.sprints = sd.sprints.filter(s => s.label !== label);
+      if (sd.current === sp.id) sd.current = sd.sprints[sd.sprints.length - 1].id;
+
+      // Desasignar iniciativas de ese sprint
+      asignadas.forEach(i => { i.sprintLabel = null; });
+
+      // Dejar sin sprint las propuestas pendientes que apuntaban a él
+      if (pendientes.length) {
+        const props = loadProposals();
+        props.forEach(p => {
+          if (p.portfolio === pf && p.sprint === label && p.status === 'pending') p.sprint = '';
+        });
+        saveProposals(props);
+      }
+
+      saveData();
+      onPropPortfolioChange();
+      refreshSprintFilters();
+      renderDashboard();
+      if (typeof renderBandeja === 'function') renderBandeja();
+      updatePropBtn();
+      toast(`"${label}" eliminado de ${pfLabel(pf)} ✓`);
     }
     function renderProponer() {
       onPropPortfolioChange();
@@ -7397,27 +7486,44 @@ Estructura requerida:
       renderPropInitiatives();
     }
     function updatePropBtn() {
-      const n = Object.entries(_propSelection).filter(([, v]) => v).length;
-      const disabled = n === 0 || !document.getElementById('prop-portfolio').value;
+      const pf = document.getElementById('prop-portfolio')?.value || '';
+      const n = propSelectedIds().length;
       const btn = document.getElementById('prop-submit-btn');
-      if (btn) btn.disabled = disabled;
-      const ebtn = document.getElementById('prop-email-btn');
-      if (ebtn) ebtn.disabled = disabled;
+      if (btn) btn.disabled = (n === 0 || !pf);
     }
 
-    // Enviar la propuesta por correo al PMO (abre el cliente de correo con el mensaje listo)
+    // IDs seleccionados que realmente pertenecen al portafolio elegido
+    function propSelectedIds() {
+      const pf = document.getElementById('prop-portfolio')?.value || '';
+      return Object.entries(_propSelection)
+        .filter(([, v]) => v)
+        .map(([k]) => parseInt(k))
+        .filter(id => {
+          const i = iniciativas.find(x => x.id === id);
+          return i && !i.archived && (!pf || i.portfolio === pf);
+        });
+    }
+
+    // ═══ FLUJO ÚNICO: "Enviar al PMO" ═══════════════════════════════════
+    //  1. Se abre el correo editable (notificación al PMO)
+    //  2. Al confirmar, la propuesta SIEMPRE se registra en "Priorización Sprint"
+    //     para que el administrador la apruebe o rechace dentro del sistema.
     const PMO_EMAIL = 'ramiro.lasso@inpsercom.com';   // PMO que recibe las propuestas
     const PMO_NOMBRE = 'Ramiro Lasso';
+
+    let _mailPropDraft = null;   // { pf, sprint, ids }
 
     function enviarPropuestaCorreo() {
       const pf = document.getElementById('prop-portfolio').value;
       const sprint = document.getElementById('prop-sprint').value;
-      const ids = Object.entries(_propSelection).filter(([, v]) => v).map(([k]) => parseInt(k));
+      const ids = propSelectedIds();
       if (!pf || !ids.length) { toast('Selecciona portafolio e iniciativas'); return; }
 
       const pfTxt = pfLabel(pf);
       const items = ids.map(iid => iniciativas.find(x => x.id === iid)).filter(Boolean)
         .sort((a, b) => (b.score || 0) - (a.score || 0));
+
+      _mailPropDraft = { pf, sprint, ids: items.map(i => i.id) };   // ya ordenados por puntaje
 
       // Lista de proyectos para incluir en el mensaje
       let lista = '';
@@ -7433,6 +7539,8 @@ Me permito compartir la propuesta de algunos proyectos orientados a optimizar pr
 
 Proyectos propuestos (${pfTxt}${sprint ? ' · ' + sprint : ''}):
 ${lista}
+La propuesta también quedó registrada en el Sistema PMO, en la pantalla "Priorización Sprint", para su aprobación o rechazo.
+
 Quedo atento/a a sus comentarios y a la oportunidad de revisarlos en mayor detalle.
 
 Saludos cordiales,
@@ -7444,40 +7552,73 @@ ${currentUserName()}`;
       document.getElementById('mailc-body').value = mensajePlantilla;
       document.getElementById('mailcompose-modal').classList.add('show');
     }
-    function closeMailCompose() { document.getElementById('mailcompose-modal').classList.remove('show'); }
-    function sendMailCompose() {
-      const subject = document.getElementById('mailc-subject').value;
-      const body = document.getElementById('mailc-body').value;
-      const mailto = `mailto:${PMO_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-      window.location.href = mailto;
-      closeMailCompose();
-      toast('Abriendo tu correo con la propuesta...');
+
+    function closeMailCompose() {
+      document.getElementById('mailcompose-modal').classList.remove('show');
+      _mailPropDraft = null;
     }
-    function submitProposal() {
-      const pf = document.getElementById('prop-portfolio').value;
-      const sprint = document.getElementById('prop-sprint').value;
-      const ids = Object.entries(_propSelection).filter(([, v]) => v).map(([k]) => parseInt(k));
-      if (!pf || !ids.length) { toast('Selecciona portafolio e iniciativas'); return; }
+
+    // Registra la propuesta en la bandeja de Priorización Sprint
+    function registrarPropuesta(draft, emailSent) {
       const props = loadProposals();
+      const items = draft.ids
+        .map(iid => iniciativas.find(x => x.id === iid))
+        .filter(Boolean)
+        .sort((a, b) => (b.score || 0) - (a.score || 0));
+
       props.push({
         id: Date.now(),
         pm: currentUserName(),
         pmEmail: currentUserEmail(),
-        portfolio: pf,
-        sprint,
+        portfolio: draft.pf,
+        sprint: draft.sprint || '',
         status: 'pending',
+        emailSent: !!emailSent,
         createdAt: new Date().toISOString(),
-        items: ids.map((iid, rank) => {
-          const i = iniciativas.find(x => x.id === iid);
-          return { iniId: iid, rank: rank + 1, codigo: i?.codigo, nombre: i?.nombre, score: i?.score };
-        }),
+        items: items.map((i, rank) => ({
+          iniId: i.id, rank: rank + 1, codigo: i.codigo, nombre: i.nombre, score: i.score
+        })),
       });
       saveProposals(props);
       _propSelection = {};
       renderPropInitiatives();
       updateBandejaBadge();
-      toast('Propuesta enviada al administrador PMO ✓');
+      return props[props.length - 1];
     }
+
+    // Tras registrar: si es admin, lo llevamos directo a Priorización Sprint
+    function irAPriorizacionSprint(msg) {
+      toast(msg);
+      if (typeof isAdmin === 'function' && isAdmin()) {
+        setTimeout(() => nav('bandeja'), 600);
+      }
+    }
+
+    // Botón primario del modal: registra + abre el correo
+    function sendMailCompose() {
+      if (!_mailPropDraft) { closeMailCompose(); return; }
+      const draft = _mailPropDraft;
+      const subject = document.getElementById('mailc-subject').value;
+      const body = document.getElementById('mailc-body').value;
+
+      registrarPropuesta(draft, true);
+      closeMailCompose();
+
+      window.location.href = `mailto:${PMO_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+      irAPriorizacionSprint('Propuesta registrada en Priorización Sprint · abriendo correo ✓');
+    }
+
+    // Botón secundario del modal: registra sin abrir el correo
+    function registrarSinCorreo() {
+      if (!_mailPropDraft) { closeMailCompose(); return; }
+      const draft = _mailPropDraft;
+      registrarPropuesta(draft, false);
+      closeMailCompose();
+      irAPriorizacionSprint('Propuesta registrada en Priorización Sprint ✓');
+    }
+
+    // Compatibilidad: cualquier llamada antigua entra al flujo único
+    function submitProposal() { enviarPropuestaCorreo(); }
 
     // ── Bandeja (admin) ─────────────────────────────────────────────────
     function renderBandeja() {
@@ -7495,11 +7636,22 @@ ${currentUserName()}`;
       }
       cont.innerHTML = props.map(p => {
         const when = new Date(p.createdAt).toLocaleString('es-EC', { dateStyle: 'medium', timeStyle: 'short' });
+        const opciones = sprintsOrdenados(p.portfolio);
+        const sprintCtrl = p.status === 'pending'
+          ? `<select class="fsel" style="width:auto;min-width:120px;padding:4px 8px;font-size:11px"
+                onchange="changePropSprint(${p.id}, this.value)" title="Sprint destino de la propuesta">
+               <option value="" ${!p.sprint ? 'selected' : ''}>— Sin sprint —</option>
+               ${opciones.map(s => `<option value="${escapeHtml(s.label)}" ${p.sprint === s.label ? 'selected' : ''}>${escapeHtml(s.label)}</option>`).join('')}
+             </select>`
+          : `<span class="prop-pm-sprint">${escapeHtml(p.sprint || '— sin sprint —')}</span>`;
+        const mailChip = p.emailSent
+          ? `<span title="Se notificó al PMO por correo" style="display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;color:#4F3A6B;background:#EAE7F2;border:1px solid #c8c2dc;border-radius:20px;padding:2px 8px;margin-left:8px">✉ Notificado</span>`
+          : '';
         return `<div class="prop-card">
           <div class="prop-pm-header">
             <div class="prop-pm-avatar">${pmoInitials(p.pm)}</div>
-            <div><div class="prop-pm-name">${escapeHtml(p.pm)}</div><div class="prop-pm-time">${when} · ${pfLabel(p.portfolio)}</div></div>
-            <span class="prop-pm-sprint">${escapeHtml(p.sprint || '')}</span>
+            <div style="flex:1;min-width:0"><div class="prop-pm-name">${escapeHtml(p.pm)}${mailChip}</div><div class="prop-pm-time">${when} · ${pfLabel(p.portfolio)}</div></div>
+            ${sprintCtrl}
             <span class="prop-status-badge ${p.status}" style="margin-left:8px">${p.status === 'pending' ? 'Pendiente' : p.status === 'approved' ? 'Aprobada' : 'Rechazada'}</span>
           </div>
           <ul class="drag-list" id="drag-list-${p.id}">
@@ -7528,6 +7680,14 @@ ${currentUserName()}`;
         }
       });
     }
+    // El admin puede reasignar el sprint destino antes de aprobar
+    function changePropSprint(propId, value) {
+      const props = loadProposals();
+      const p = props.find(x => x.id === propId); if (!p) return;
+      p.sprint = value || '';
+      saveProposals(props);
+      toast(value ? `Sprint destino: ${value}` : 'Propuesta sin sprint destino');
+    }
     function updateDragRanks(propId) {
       const props = loadProposals();
       const p = props.find(x => x.id === propId); if (!p) return;
@@ -7547,6 +7707,9 @@ ${currentUserName()}`;
     function approveProposal(propId) {
       const props = loadProposals();
       const p = props.find(x => x.id === propId); if (!p) return;
+      if (!p.sprint) {
+        if (!confirm('Esta propuesta no tiene sprint destino.\n\nSi la apruebas así, las iniciativas NO quedarán asignadas a ningún sprint.\n¿Continuar de todos modos?')) return;
+      }
       p.status = 'approved';
       // Asignar sprint aprobado a las iniciativas
       p.items.forEach(it => {
@@ -7557,7 +7720,9 @@ ${currentUserName()}`;
       saveData();
       updateBandejaBadge();
       renderBandeja();
-      toast('Propuesta aprobada ✓ — sprint asignado a las iniciativas');
+      refreshSprintFilters();
+      renderDashboard();
+      toast(p.sprint ? `Propuesta aprobada ✓ — ${p.sprint} asignado a las iniciativas` : 'Propuesta aprobada ✓');
       notificarDecisionPM(p, 'aprobada');
     }
     function rejectProposal(propId) {
