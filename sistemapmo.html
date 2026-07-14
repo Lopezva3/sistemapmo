@@ -6108,30 +6108,193 @@
 
     // ═══════════════ CREAR WORK ITEM EN AZURE ═══════════════
     // Campos requeridos por el process de la org (evita rechazos del PATCH de creación)
-    function adoRequiredFieldOps(type) {
-      const ops = [];
-      if (type === 'Initiative') {
-        // El process custom exige los impulsores; los inicializamos en 0
-        ops.push({ op: 'add', path: '/fields/Custom.AdditionalRevenue', value: 0 });
-        ops.push({ op: 'add', path: '/fields/Custom.ProjectSavings', value: 0 });
-        ops.push({ op: 'add', path: '/fields/Custom.RiskMitigation', value: 0 });
-        ops.push({ op: 'add', path: '/fields/Custom.RegulatoryChange', value: 0 });
-        ops.push({ op: 'add', path: '/fields/Custom.ManagementRequest', value: 0 });
-        ops.push({ op: 'add', path: '/fields/Custom.45355b6b-035e-42e1-b6d5-eb261614d62f', value: 0 });
-        ops.push({ op: 'add', path: '/fields/Custom.2ff7eefe-7a57-42ca-a2a0-4bca5520a3ae', value: 0 });
-        ops.push({ op: 'add', path: '/fields/Custom.PuntajeTotal', value: 0 });
+    // ═══════════════════════════════════════════════════════════════════
+    //  CREACIÓN DE WORK ITEMS — motor auto-adaptativo
+    //  El proceso de Azure cambia entre proyectos: unos exigen campos que
+    //  otros ni siquiera tienen. En vez de adivinar con una lista fija,
+    //  leemos el ESQUEMA REAL del tipo, rellenamos los requeridos que
+    //  falten, quitamos los campos que no existen, y si aún así Azure
+    //  devuelve error, lo leemos y corregimos el campo que él mismo señala.
+    // ═══════════════════════════════════════════════════════════════════
+
+    // Campos de sistema que Azure gestiona solo (enviarlos provoca HTTP 400)
+    const ADO_SKIP_FIELDS = new Set([
+      'System.Id', 'System.Rev', 'System.AreaId', 'System.IterationId', 'System.TeamProject',
+      'System.WorkItemType', 'System.CreatedBy', 'System.CreatedDate', 'System.ChangedBy',
+      'System.ChangedDate', 'System.AuthorizedAs', 'System.AuthorizedDate', 'System.RevisedDate',
+      'System.Watermark', 'System.NodeName', 'System.CommentCount', 'System.Parent', 'System.Reason',
+      'System.BoardColumn', 'System.BoardColumnDone', 'System.BoardLane',
+      'System.AreaPath', 'System.IterationPath',   // Azure pone el default del proyecto
+    ]);
+
+    const _wiTypeFields = {};   // caché: "proyecto|tipo" → [campos del tipo]
+    let _adoFieldCatalog = null; // caché: refName → { type: 'string'|'double'|... }
+
+    // Esquema de campos de un tipo de work item DENTRO de un proyecto
+    async function adoGetTypeFields(projectName, type) {
+      const key = `${projectName}|${type}`;
+      if (_wiTypeFields[key]) return _wiTypeFields[key];
+      try {
+        const enc = encodeURIComponent(projectName);
+        const url = `${ADO.baseUrl}/${enc}/_apis/wit/workitemtypes/${encodeURIComponent(type)}/fields?$expand=all&api-version=${ADO.apiVersion}`;
+        const data = await adoFetch(url);
+        _wiTypeFields[key] = data.value || [];
+      } catch (e) {
+        console.warn(`No se pudo leer el esquema de "${type}" en ${projectName}:`, e.message);
+        _wiTypeFields[key] = [];   // sin esquema → no filtramos nada, solo reintentos
       }
-      return ops;
+      return _wiTypeFields[key];
+    }
+
+    // Catálogo global de campos (para conocer el TIPO de dato de cada uno)
+    async function adoGetFieldCatalog() {
+      if (_adoFieldCatalog) return _adoFieldCatalog;
+      try {
+        const data = await adoFetch(`${ADO.baseUrl}/_apis/wit/fields?api-version=${ADO.apiVersion}`);
+        _adoFieldCatalog = {};
+        (data.value || []).forEach(f => { _adoFieldCatalog[f.referenceName] = f; });
+      } catch (e) {
+        console.warn('No se pudo leer el catálogo de campos:', e.message);
+        _adoFieldCatalog = {};
+      }
+      return _adoFieldCatalog;
+    }
+
+    // Valor por defecto sensato para un campo requerido
+    function adoDefaultValueFor(fieldDef, catalogDef) {
+      if (fieldDef.defaultValue !== null && fieldDef.defaultValue !== undefined && fieldDef.defaultValue !== '') {
+        return fieldDef.defaultValue;
+      }
+      if (Array.isArray(fieldDef.allowedValues) && fieldDef.allowedValues.length) {
+        return fieldDef.allowedValues[0];
+      }
+      const t = String(catalogDef?.type || '').toLowerCase();
+      if (t === 'integer' || t === 'double') return 0;
+      if (t === 'boolean') return false;
+      if (t === 'datetime') return new Date().toISOString();
+      if (t === 'html' || t === 'plaintext') return 'N/A';
+      if (t === 'identity' || t === 'treepath') return null;   // no tocar: Azure los resuelve
+      return 'N/A';   // string
+    }
+
+    // Extrae el mensaje legible del error que devuelve Azure
+    function adoErrMsg(txt) {
+      try { const j = JSON.parse(txt); return j.message || j.value?.Message || txt; }
+      catch { return txt; }
+    }
+
+    // Detecta QUÉ campo está causando el error, leyendo el mensaje de Azure
+    function adoErrField(msg) {
+      // "The field 'Custom.X' does not exist" / "TF51535: Cannot find field Custom.X"
+      let m = msg.match(/field\s+'([^']+)'\s+does not exist/i)
+        || msg.match(/Cannot find field\s+([A-Za-z0-9_.\- ]+)/i)
+        || msg.match(/VS402625[^']*'([^']+)'/i);
+      if (m) return { ref: m[1].trim(), kind: 'missing' };
+      // "TF401320: Rule Error for field Additional Revenue. Error code: Required, InvalidEmpty"
+      m = msg.match(/Rule Error for field\s+(.+?)\.\s*Error code:\s*([^.\n]+)/i);
+      if (m) return { ref: m[1].trim(), kind: 'rule', codes: m[2] };
+      // "Value of field 'X' is invalid" / "El campo X es obligatorio"
+      m = msg.match(/field\s+'([^']+)'\s+(is required|is invalid|cannot be empty)/i);
+      if (m) return { ref: m[1].trim(), kind: 'rule' };
+      return null;
+    }
+
+    // POST con auto-corrección: devuelve el work item creado o lanza error con el mensaje REAL
+    async function adoPostWorkItem(projectName, type, ops, maxRetries = 6) {
+      const enc = encodeURIComponent(projectName);
+      const url = `${ADO.baseUrl}/${enc}/_apis/wit/workitems/$${encodeURIComponent(type)}?api-version=${ADO.apiVersion}`;
+
+      const schema = await adoGetTypeFields(projectName, type);
+      const catalog = await adoGetFieldCatalog();
+      const byRef = {}, byName = {};
+      schema.forEach(f => {
+        byRef[f.referenceName] = f;
+        byName[String(f.name || '').toLowerCase()] = f;
+      });
+
+      // 1) Quitar del payload los campos que NO existen en este tipo/proyecto
+      if (schema.length) {
+        const antes = ops.length;
+        ops = ops.filter(o => {
+          if (!o.path || !o.path.startsWith('/fields/')) return true;
+          const ref = o.path.slice('/fields/'.length);
+          if (ADO_SKIP_FIELDS.has(ref)) return false;
+          return !!byRef[ref];
+        });
+        if (ops.length !== antes) console.log(`ℹ️ ${antes - ops.length} campo(s) no existen en "${type}" de ${projectName} · omitidos`);
+      }
+
+      // 2) Añadir los campos REQUERIDOS del proceso que falten en el payload
+      const presentes = new Set(ops.filter(o => o.path?.startsWith('/fields/')).map(o => o.path.slice('/fields/'.length)));
+      schema.filter(f => f.alwaysRequired && !presentes.has(f.referenceName) && !ADO_SKIP_FIELDS.has(f.referenceName))
+        .forEach(f => {
+          const v = adoDefaultValueFor(f, catalog[f.referenceName]);
+          if (v !== null && v !== undefined) {
+            ops.push({ op: 'add', path: '/fields/' + f.referenceName, value: v });
+            console.log(`ℹ️ Campo requerido autocompletado: ${f.name} (${f.referenceName}) =`, v);
+          }
+        });
+
+      // 3) Enviar, y si Azure se queja, corregir lo que él mismo señala
+      let lastMsg = '';
+      for (let intento = 1; intento <= maxRetries; intento++) {
+        const res = await fetch(url, {
+          method: 'POST', headers: adoHeaders('application/json-patch+json'), body: JSON.stringify(ops)
+        });
+        if (res.ok) return await res.json();
+
+        const txt = await res.text();
+        lastMsg = adoErrMsg(txt);
+        console.warn(`Intento ${intento} — Azure rechazó la creación de ${type}:`, lastMsg);
+
+        // Token vencido → renovar y reintentar
+        if ((res.status === 401 || res.status === 203) && intento === 1) {
+          if (await refreshAzureToken()) continue;
+        }
+
+        // Problema con la relación padre → crearlo suelto
+        if (/relation|link|TF201036|circular|parent/i.test(lastMsg) && ops.some(o => o.path === '/relations/-')) {
+          console.warn('→ La relación con el padre no es válida · se crea sin jerarquía');
+          ops = ops.filter(o => o.path !== '/relations/-');
+          continue;
+        }
+
+        const info = adoErrField(lastMsg);
+        if (!info) break;   // no sabemos qué corregir
+
+        const f = byRef[info.ref] || byName[info.ref.toLowerCase()];
+
+        // Campo inexistente → quitarlo del payload
+        if (info.kind === 'missing' || !f) {
+          const ref = f ? f.referenceName : info.ref;
+          const antes = ops.length;
+          ops = ops.filter(o => o.path !== '/fields/' + ref);
+          if (ops.length === antes) break;   // no estaba: no hay nada que corregir
+          console.warn(`→ Campo "${ref}" no existe aquí · omitido`);
+          continue;
+        }
+
+        // Campo requerido / valor inválido → poner un default válido
+        const ref = f.referenceName;
+        const v = adoDefaultValueFor(f, catalog[ref]);
+        if (v === null || v === undefined) break;
+        const existente = ops.find(o => o.path === '/fields/' + ref);
+        if (existente) {
+          if (existente.value === v) break;   // ya lo intentamos con ese valor
+          existente.value = v;
+        } else {
+          ops.push({ op: 'add', path: '/fields/' + ref, value: v });
+        }
+        console.warn(`→ Campo requerido "${f.name}" completado con:`, v);
+      }
+      throw new Error(lastMsg || 'Azure rechazó la creación del work item');
     }
 
     async function adoCreateWorkItem(projectName, type, title, parentId, description) {
       if (!projectName || !ADO.token) { toast('Sin conexión a Azure'); return false; }
+      if (!title || !String(title).trim()) { toast('El título es obligatorio'); return false; }
       try {
-        const encName = encodeURIComponent(projectName);
-        const ops = [
-          { op: 'add', path: '/fields/System.Title', value: title },
-          ...adoRequiredFieldOps(type),
-        ];
+        const ops = [{ op: 'add', path: '/fields/System.Title', value: String(title).trim() }];
         if (description) ops.push({ op: 'add', path: '/fields/System.Description', value: description });
         if (parentId) ops.push({
           op: 'add', path: '/relations/-', value: {
@@ -6139,19 +6302,11 @@
             url: `${ADO.baseUrl}/_apis/wit/workItems/${parentId}`,
           }
         });
-        const res = await fetch(`${ADO.baseUrl}/${encName}/_apis/wit/workitems/$${encodeURIComponent(type)}?api-version=${ADO.apiVersion}`, {
-          method: 'POST', headers: adoHeaders('application/json-patch+json'), body: JSON.stringify(ops)
-        });
-        if (!res.ok) {
-          const t = await res.text();
-          console.error('Create WI failed:', t);
-          toast(`Error al crear ${type}: HTTP ${res.status}`);
-          return false;
-        }
+        await adoPostWorkItem(projectName, type, ops);
         return true;
       } catch (err) {
-        console.error(err);
-        toast('Error: ' + err.message.slice(0, 80));
+        console.error('adoCreateWorkItem:', err);
+        toast(`No se pudo crear ${type}: ${String(err.message).slice(0, 130)}`, 6000);
         return false;
       }
     }
@@ -6161,7 +6316,6 @@
       if (!window._targetAdoProject) return false;
       const projectName = window._targetAdoProject;
       try {
-        const encName = encodeURIComponent(projectName);
         const ops = [
           { op: 'add', path: '/fields/System.Title', value: ini.nombre },
           { op: 'add', path: '/fields/System.Description', value: ini.descripcion || '' },
@@ -6195,18 +6349,15 @@
         if (ini.estado) ops.push({ op: 'add', path: '/fields/System.State', value: ini.estado });
         if (ini.fechaInicio) ops.push({ op: 'add', path: '/fields/Custom.FechaInicioIniciativa', value: ini.fechaInicio });
         if (ini.fechaFin) ops.push({ op: 'add', path: '/fields/Custom.7ab6bae5-8af8-4929-a384-9084ec9005c5', value: ini.fechaFin });
-        const res = await fetch(`${ADO.baseUrl}/${encName}/_apis/wit/workitems/$Initiative?api-version=${ADO.apiVersion}`, {
-          method: 'POST', headers: adoHeaders('application/json-patch+json'), body: JSON.stringify(ops)
-        });
-        if (!res.ok) { const t = await res.text(); throw new Error('HTTP ' + res.status + ': ' + t.slice(0, 160)); }
-        const wi = await res.json();
+
+        const wi = await adoPostWorkItem(projectName, 'Initiative', ops);
         ini.adoWiId = wi.id;
         ini.adoName = projectName;
         ini.fromAdo = true;
         return true;
       } catch (err) {
         console.error('crearIniciativaEnProyecto:', err);
-        toast('Error al crear en Azure: ' + err.message.slice(0, 90));
+        toast('Error al crear en Azure: ' + String(err.message).slice(0, 130), 6000);
         return false;
       }
     }
@@ -6325,12 +6476,12 @@
       return list.map(x => `<option ${x === cur ? 'selected' : ''}>${x}</option>`).join('');
     }
     let _toastT = null;
-    function toast(msg) {
+    function toast(msg, ms) {
       const el = document.getElementById('toast-el');
       document.getElementById('toast-msg').textContent = msg;
       el.classList.add('show');
       clearTimeout(_toastT);
-      _toastT = setTimeout(() => el.classList.remove('show'), 2800);
+      _toastT = setTimeout(() => el.classList.remove('show'), ms || 2800);
     }
 
     // ── Roles ────────────────────────────────────────────────────────────
