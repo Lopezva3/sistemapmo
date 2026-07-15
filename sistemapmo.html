@@ -2667,7 +2667,10 @@
 
       <div style="margin-bottom:12px">
         <label style="font-size:11px;font-weight:700;color:#4F3A6B;text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:5px">Para</label>
-        <div id="mailc-to" style="font-size:13px;color:var(--tx2);background:#f4f2f9;border:1px solid #ddd9ea;border-radius:8px;padding:9px 12px"></div>
+        <select class="fsel" id="mailc-to" style="width:100%">
+          <option value="ramiro.lasso@inpsercom.com">Ramiro Lasso — ramiro.lasso@inpsercom.com</option>
+          <option value="valeria.lopez@inpsercom.com">Valeria López — valeria.lopez@inpsercom.com</option>
+        </select>
       </div>
       <div style="margin-bottom:12px">
         <label style="font-size:11px;font-weight:700;color:#4F3A6B;text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:5px">Asunto</label>
@@ -2678,12 +2681,9 @@
         <textarea id="mailc-body" style="width:100%;min-height:260px;font-family:inherit;font-size:13px;line-height:1.6;padding:12px;border:1px solid var(--border);border-radius:8px;resize:vertical"></textarea>
       </div>
 
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
-        <button class="btn btn-default btn-sm" onclick="registrarSinCorreo()" title="Registra la propuesta en Priorización Sprint sin abrir el correo">Registrar sin enviar correo</button>
-        <div style="display:flex;gap:8px">
-          <button class="btn btn-default btn-sm" onclick="closeMailCompose()">Cancelar</button>
-          <button class="btn btn-primary btn-sm" onclick="sendMailCompose()">Registrar y abrir correo</button>
-        </div>
+      <div style="display:flex;justify-content:flex-end;align-items:center;gap:8px">
+        <button class="btn btn-default btn-sm" onclick="closeMailCompose()">Cancelar</button>
+        <button class="btn btn-primary btn-sm" onclick="sendMailCompose()">Registrar y abrir correo</button>
       </div>
     </div>
   </div>
@@ -7879,8 +7879,12 @@ Quedo atento/a a sus comentarios y a la oportunidad de revisarlos en mayor detal
 Saludos cordiales,
 ${currentUserName()}`;
 
-      // Abrir ventana editable
-      document.getElementById('mailc-to').textContent = PMO_EMAIL;
+      // Abrir ventana editable. Preseleccionar destinatario: si el usuario actual
+      // es uno de los administradores, apuntar al otro por defecto (no a sí mismo).
+      const sel = document.getElementById('mailc-to');
+      const yo = currentUserEmail().toLowerCase().trim();
+      if (yo === 'valeria.lopez@inpsercom.com') sel.value = 'ramiro.lasso@inpsercom.com';
+      else sel.value = 'ramiro.lasso@inpsercom.com';
       document.getElementById('mailc-subject').value = `Propuesta de Priorización — ${pfTxt}${sprint ? ' · ' + sprint : ''}`;
       document.getElementById('mailc-body').value = mensajePlantilla;
       document.getElementById('mailcompose-modal').classList.add('show');
@@ -7927,27 +7931,19 @@ ${currentUserName()}`;
       }
     }
 
-    // Botón primario del modal: registra + abre el correo
+    // Botón primario del modal: registra + abre el correo al destinatario elegido
     function sendMailCompose() {
       if (!_mailPropDraft) { closeMailCompose(); return; }
       const draft = _mailPropDraft;
+      const to = document.getElementById('mailc-to').value || PMO_EMAIL;
       const subject = document.getElementById('mailc-subject').value;
       const body = document.getElementById('mailc-body').value;
 
       registrarPropuesta(draft, true);
       closeMailCompose();
 
-      window.location.href = `mailto:${PMO_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+      window.location.href = `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
       irAPriorizacionSprint('Propuesta registrada en Priorización Sprint · abriendo correo ✓');
-    }
-
-    // Botón secundario del modal: registra sin abrir el correo
-    function registrarSinCorreo() {
-      if (!_mailPropDraft) { closeMailCompose(); return; }
-      const draft = _mailPropDraft;
-      registrarPropuesta(draft, false);
-      closeMailCompose();
-      irAPriorizacionSprint('Propuesta registrada en Priorización Sprint ✓');
     }
 
     // Compatibilidad: cualquier llamada antigua entra al flujo único
@@ -8263,7 +8259,8 @@ Administrador PMO — EOS Tech Company`;
         ws.getCell(r, 1).value = k.id || `R${String(i + 1).padStart(3, '0')}`;
         ws.getCell(r, 2).value = k.nombre || '';
         ws.getCell(r, 3).value = k.descripcion || '';
-        ws.getCell(r, 4).value = hoy;                       // Fecha identificación
+        // Fechas: solo si la IA las aporta; si no, se dejan VACÍAS (no se inventan)
+        ws.getCell(r, 4).value = k.fechaIdentificacion ? new Date(k.fechaIdentificacion) : null;   // Fecha identificación
         ws.getCell(r, 5).value = k.identificador || 'PM';   // Identificador del riesgo
         ws.getCell(r, 6).value = k.categoria || '';
         ws.getCell(r, 7).value = k.probabilidad || '';
@@ -8273,7 +8270,7 @@ Administrador PMO — EOS Tech Company`;
         ws.getCell(r, 10).value = { formula: `(IF(G${r}="Alto",3,IF(G${r}="Medio",2,IF(G${r}="bajo",1,))))*(IF(H${r}="Alto",3,IF(H${r}="Medio",2,IF(H${r}="bajo",1,))))` };
         ws.getCell(r, 11).value = { formula: `(IF(I${r}="Largo",1,IF(I${r}="Medio",2,IF(I${r}="Corto",3,))))*J${r}` };
         ws.getCell(r, 12).value = k.propietario || '';
-        ws.getCell(r, 13).value = hoy;                      // Fecha de asignación
+        ws.getCell(r, 13).value = k.fechaAsignacion ? new Date(k.fechaAsignacion) : null;   // Fecha de asignación (vacía si no hay)
         ws.getCell(r, 14).value = k.estrategia || '';
         ws.getCell(r, 15).value = k.planRespuesta || '';
         ws.getCell(r, 16).value = k.planContingencia || '';
@@ -8296,7 +8293,68 @@ Administrador PMO — EOS Tech Company`;
     }
 
     // ── Prompts: la IA devuelve JSON, no HTML ────────────────────────────
-    function promptBacklog(ini) {
+
+    // Lee los work items REALES del proyecto en Azure (Epics/Features/Stories/Tasks/Bugs)
+    // para que la IA analice el trabajo que ya existe, no solo los datos de cabecera.
+    async function fetchAdoWorkItemsForIA(projectName) {
+      if (!projectName || !ADO.token) return null;
+      try {
+        const encName = encodeURIComponent(projectName);
+        const wiqlRes = await fetch(`${ADO.baseUrl}/${encName}/_apis/wit/wiql?api-version=${ADO.apiVersion}`, {
+          method: 'POST', headers: adoHeaders('application/json'),
+          body: JSON.stringify({
+            query: `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @project AND [System.WorkItemType] IN ('Epic','Feature','User Story','Task','Bug') ORDER BY [System.Id] ASC`
+          })
+        });
+        if (!wiqlRes.ok) return null;
+        const ids = ((await wiqlRes.json()).workItems || []).map(w => w.id);
+        if (!ids.length) return [];
+
+        const items = [];
+        for (let i = 0; i < ids.length && i < 400; i += 200) {
+          const batch = ids.slice(i, i + 200);
+          const fRes = await adoFetch(`${ADO.baseUrl}/_apis/wit/workitems?ids=${batch.join(',')}&api-version=${ADO.apiVersion}`);
+          (fRes.value || []).forEach(wi => {
+            const f = wi.fields || {};
+            const desc = String(f['System.Description'] || f['Microsoft.VSTS.Common.AcceptanceCriteria'] || '')
+              .replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 240);
+            items.push({
+              tipo: f['System.WorkItemType'],
+              titulo: f['System.Title'] || '',
+              estado: f['System.State'] || '',
+              asignado: f['System.AssignedTo']?.displayName || '',
+              descripcion: desc,
+              riesgo: f['Microsoft.VSTS.Common.Risk'] || '',
+              esfuerzo: f['Microsoft.VSTS.Scheduling.Effort'] ?? f['Microsoft.VSTS.Scheduling.OriginalEstimate'] ?? '',
+            });
+          });
+        }
+        return items;
+      } catch (e) {
+        console.warn('fetchAdoWorkItemsForIA:', e.message);
+        return null;
+      }
+    }
+
+    // Resume los work items reales en texto para inyectarlo en el prompt
+    function resumenWorkItems(items) {
+      if (!items) return 'No se pudieron leer los work items de Azure (revisa la conexión). Trabaja con los datos de cabecera.';
+      if (!items.length) return 'El proyecto todavía no tiene Epics/Features/Historias/Tareas creadas en Azure. Genera el contenido en base a la descripción del proyecto.';
+      const porTipo = {};
+      items.forEach(it => { (porTipo[it.tipo] = porTipo[it.tipo] || []).push(it); });
+      let txt = `El proyecto tiene ${items.length} work items reales en Azure:\n`;
+      ['Epic', 'Feature', 'User Story', 'Task', 'Bug'].forEach(t => {
+        const arr = porTipo[t]; if (!arr || !arr.length) return;
+        txt += `\n${t} (${arr.length}):\n`;
+        arr.slice(0, 40).forEach(it => {
+          txt += `  • ${it.titulo}${it.estado ? ` [${it.estado}]` : ''}${it.riesgo ? ` (riesgo ${it.riesgo})` : ''}${it.descripcion ? ` — ${it.descripcion}` : ''}\n`;
+        });
+        if (arr.length > 40) txt += `  ... y ${arr.length - 40} más\n`;
+      });
+      return txt;
+    }
+
+    function promptBacklog(ini, wiResumen) {
       return `Eres un consultor PMO senior de EOS Tech Company (INPSERCOM S.A.). Vas a redactar el contenido de un documento de BACKLOG DE INICIATIVA que se insertará en la plantilla corporativa oficial.
 
 DATOS REALES DEL PROYECTO:
@@ -8316,8 +8374,12 @@ Impulsores de cartera (0-5): ${IMPS.map((n, idx) => `${n}=${ini.imp?.[idx] ?? 0}
 Fechas: inicio ${ini.fechaInicio || '—'}, fin ${ini.fechaFin || '—'}
 Observaciones: ${ini.observaciones || '—'}
 
+TRABAJO REAL YA REGISTRADO EN AZURE DEVOPS:
+${wiResumen}
+
 Responde ÚNICAMENTE con un objeto JSON válido (sin markdown, sin backticks, sin texto adicional antes o después).
 Cada valor es TEXTO PLANO. Usa saltos de línea (\\n) para separar párrafos o viñetas. NO uses HTML ni markdown.
+Si algún dato no existe (fechas, costos, etc.), NO lo inventes: descríbelo como "Por definir" o déjalo fuera.
 
 {
   "justificacion": "Situación actual, problemas concretos del proceso y por qué se necesita el proyecto. Sé específico con los dolores actuales. 2-3 párrafos.",
@@ -8338,13 +8400,15 @@ Cada valor es TEXTO PLANO. Usa saltos de línea (\\n) para separar párrafos o v
 REGLAS IMPORTANTES:
 - "backlog" es un ARRAY con 10 a 14 historias de usuario. Cada elemento solo lleva "historia" y "rol".
   NO incluyas prioridad: esa columna se completa manualmente después.
+- Si el proyecto YA TIENE work items reales en Azure (ver arriba), basa el backlog y el desglose en ESE trabajo real,
+  reflejando las Features e historias que ya existen; complementa solo con lo que falte de forma coherente.
 - "evaluacion" es solo la justificación en texto de por qué se asignó cada puntaje. NO repitas la tabla
   de calificaciones: la plantilla ya la trae y se llena con los datos reales del sistema.
 
 Basa TODO el contenido en los datos reales del proyecto. Sé concreto y profesional, como un PMO con experiencia.`;
     }
 
-    function promptRiesgos(ini) {
+    function promptRiesgos(ini, wiResumen) {
       return `Eres un consultor PMO senior de EOS Tech Company (INPSERCOM S.A.), experto en gestión de riesgos. Vas a generar los riesgos que se cargarán en la plantilla oficial "Registro de Riesgos".
 
 DATOS REALES DEL PROYECTO:
@@ -8361,8 +8425,12 @@ Fechas: inicio ${ini.fechaInicio || '—'}, fin ${ini.fechaFin || '—'}
 Criticidad: ${ini.criticidad || '—'} (puntaje ${(ini.score || 0).toFixed(2)})
 Observaciones: ${ini.observaciones || '—'}
 
+TRABAJO REAL YA REGISTRADO EN AZURE DEVOPS:
+${wiResumen}
+
 Responde ÚNICAMENTE con un array JSON válido (sin markdown, sin backticks, sin texto adicional).
-Genera entre 10 y 15 riesgos ESPECÍFICOS para este proyecto y sus tecnologías (no genéricos).
+Genera entre 10 y 15 riesgos ESPECÍFICOS para este proyecto, sus tecnologías y el trabajo real listado arriba (no genéricos).
+Si un dato como fechas o responsables no existe, NO lo inventes: usa "PM" como identificador por defecto y deja el propietario en el rol más lógico.
 
 [
   {
@@ -8393,6 +8461,7 @@ USA EXACTAMENTE ESTOS VALORES (son los catálogos de la plantilla):
 - identificador: quien identifica el riesgo (normalmente PM)
 
 NO incluyas exposición ni severidad: la plantilla los calcula automáticamente.
+Si el proyecto ya tiene Features/historias reales en Azure, deriva riesgos concretos de ESE trabajo (integraciones, dependencias, complejidad técnica visible).
 Piensa como PMO experimentado: riesgos técnicos, de integración, de alcance, de recursos, de cronograma, de calidad de datos, de dependencias con el cliente, de seguridad, etc.`;
     }
 
@@ -8413,11 +8482,16 @@ Piensa como PMO experimentado: riesgos técnicos, de integración, de alcance, d
         <div class="bl-loading">
           <div class="bl-spinner"></div>
           <div class="bl-loading-msg">Generando ${titulo.toLowerCase()} con IA...</div>
-          <div class="bl-loading-sub">Analizando el proyecto y rellenando la plantilla ${formato} (30-90 segundos)</div>
+          <div class="bl-loading-sub">Analizando el proyecto real en Azure y rellenando la plantilla ${formato} (30-90 segundos)</div>
         </div>`;
       document.getElementById('bl-overlay').classList.add('open');
 
       try {
+        // Leer los work items REALES del proyecto en Azure para que la IA los analice
+        const projName = ini.adoName || window._targetAdoProject || null;
+        const wiItems = await fetchAdoWorkItemsForIA(projName);
+        const wiResumen = resumenWorkItems(wiItems);
+
         const res = await fetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',
           headers: {
@@ -8429,7 +8503,7 @@ Piensa como PMO experimentado: riesgos técnicos, de integración, de alcance, d
           body: JSON.stringify({
             model: 'claude-sonnet-4-6',
             max_tokens: 8000,
-            messages: [{ role: 'user', content: esBacklog ? promptBacklog(ini) : promptRiesgos(ini) }],
+            messages: [{ role: 'user', content: esBacklog ? promptBacklog(ini, wiResumen) : promptRiesgos(ini, wiResumen) }],
           }),
         });
         const resp = await res.json();
