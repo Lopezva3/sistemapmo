@@ -5450,11 +5450,52 @@
           <span style="display:flex;align-items:center;gap:9px">${wsTypeIcon('Bug', undefined, 19)} Ocultar Bugs del backlog</span>
           <input type="checkbox" id="wss-bugsoff" ${wsBugsOff() ? 'checked' : ''}><span class="sl"></span>
         </label>
+        <div class="wi-sec-title">Diagnóstico de campos</div>
+        <div style="font-size:11px;color:var(--tx3);margin-bottom:8px">Si algún campo (fechas, ROI, etc.) no guarda, esto muestra los nombres internos reales de Azure para ajustarlos.</div>
+        <button class="btn btn-default btn-sm" style="width:100%" onclick="mostrarCamposAzure()">🔍 Ver campos reales de Azure (Initiative)</button>
+        <div id="wss-fields-out" style="margin-top:10px"></div>
         <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
           <button class="btn btn-default btn-sm" onclick="closeWsSettings()">Cancelar</button>
           <button class="btn btn-primary btn-sm" onclick="saveWsSettings()">Guardar</button>
         </div>`;
       document.getElementById('ws-settings-modal').classList.add('open');
+    }
+
+    // Lista los campos reales del tipo Initiative en el proyecto actual, resaltando fechas y campos de aprobación
+    async function mostrarCamposAzure() {
+      const out = document.getElementById('wss-fields-out');
+      const proj = _wsIni?.adoName;
+      if (!proj) { out.innerHTML = '<div style="font-size:11px;color:#b23">Abre este panel desde un proyecto (workspace) para poder consultar sus campos.</div>'; return; }
+      out.innerHTML = '<div style="font-size:11px;color:var(--tx3)">Consultando Azure...</div>';
+      try {
+        const schema = await adoGetTypeFields(proj, 'Initiative');
+        if (!schema.length) { out.innerHTML = '<div style="font-size:11px;color:#b23">Azure no devolvió campos (revisa permisos).</div>'; return; }
+        const catalog = await adoGetFieldCatalog();
+        // Ordenar: primero fechas y aprobación, luego el resto
+        const esFecha = f => /fecha|date/i.test(f.name) || /fecha|date/i.test(f.referenceName) || (catalog[f.referenceName]?.type || '').toLowerCase() === 'datetime';
+        const rows = schema.slice().sort((a, b) => (esFecha(b) - esFecha(a)) || a.name.localeCompare(b.name));
+        const rowHtml = f => {
+          const tipo = catalog[f.referenceName]?.type || '';
+          const hl = esFecha(f) ? 'background:#EAE7F2' : '';
+          const req = f.alwaysRequired ? ' <span style="color:#b23;font-weight:700">*req</span>' : '';
+          return `<tr style="${hl}"><td style="padding:3px 6px;font-weight:600">${escapeHtml(f.name)}${req}</td><td style="padding:3px 6px;font-family:monospace;font-size:10px;color:#4F3A6B">${escapeHtml(f.referenceName)}</td><td style="padding:3px 6px;color:var(--tx3);font-size:10px">${escapeHtml(tipo)}</td></tr>`;
+        };
+        out.innerHTML = `
+          <div style="font-size:11px;color:var(--tx3);margin-bottom:6px">${schema.length} campos · las <span style="background:#EAE7F2;padding:0 4px;border-radius:3px">fechas</span> van primero. Pásame esta lista (o los refName de las fechas) y ajusto el guardado.</div>
+          <div style="max-height:280px;overflow:auto;border:1px solid var(--border);border-radius:8px">
+            <table style="width:100%;border-collapse:collapse;font-size:11px">
+              <thead><tr style="position:sticky;top:0;background:#2E2248;color:#fff"><th style="padding:5px 6px;text-align:left">Campo</th><th style="padding:5px 6px;text-align:left">referenceName</th><th style="padding:5px 6px;text-align:left">Tipo</th></tr></thead>
+              <tbody>${rows.map(rowHtml).join('')}</tbody>
+            </table>
+          </div>
+          <button class="btn btn-default btn-sm" style="margin-top:8px" onclick='copiarCamposAzure(${JSON.stringify(schema.map(f => ({ n: f.name, r: f.referenceName, t: catalog[f.referenceName]?.type || "", req: !!f.alwaysRequired })))})'>📋 Copiar todo</button>`;
+      } catch (e) {
+        out.innerHTML = `<div style="font-size:11px;color:#b23">Error: ${escapeHtml(String(e.message))}</div>`;
+      }
+    }
+    function copiarCamposAzure(data) {
+      const txt = data.map(f => `${f.n}\t${f.r}\t${f.t}${f.req ? '\t*requerido' : ''}`).join('\n');
+      navigator.clipboard.writeText('Campo\treferenceName\tTipo\n' + txt).then(() => toast('Campos copiados ✓'));
     }
     function closeWsSettings() { document.getElementById('ws-settings-modal').classList.remove('open'); }
     function saveWsSettings() {
@@ -5879,17 +5920,85 @@
       if (!ops.length) { toast('Sin cambios que guardar'); return; }
       toast('Guardando en Azure...');
       try {
-        const res = await fetch(`${ADO.baseUrl}/_apis/wit/workitems/${_wiEd.id}?api-version=${ADO.apiVersion}`, {
-          method: 'PATCH', headers: adoHeaders('application/json-patch+json'), body: JSON.stringify(ops)
-        });
-        if (!res.ok) { const t = await res.text(); throw new Error(res.status + ': ' + t.slice(0, 160)); }
+        const proj = _wsIni?.adoName || _wiEd.fields?.['System.TeamProject'] || '';
+        await adoPatchWorkItem(_wiEd.id, _wiEd.type, proj, ops);
         toast('✓ Guardado en Azure DevOps');
         closeWiEditor();
         await loadProjectWorkItems();
       } catch (err) {
-        console.error(err);
-        toast('Error: ' + err.message.slice(0, 90));
+        console.error('saveWiEditor:', err);
+        toast('No se pudo guardar: ' + String(err.message).slice(0, 130), 6000);
       }
+    }
+
+    // PATCH de un work item existente, con la misma auto-corrección que la creación.
+    // Si Azure señala un campo inexistente lo descarta; si falta un requerido lo completa; y reintenta.
+    async function adoPatchWorkItem(id, type, projectName, ops, maxRetries = 6) {
+      const url = `${ADO.baseUrl}/_apis/wit/workitems/${id}?api-version=${ADO.apiVersion}`;
+
+      // Si conocemos el proyecto, quitamos de entrada los campos que no existen en este tipo
+      if (projectName) {
+        const schema = await adoGetTypeFields(projectName, type);
+        if (schema.length) {
+          const byRef = {}; schema.forEach(f => { byRef[f.referenceName] = f; });
+          const antes = ops.length;
+          ops = ops.filter(o => {
+            if (!o.path || !o.path.startsWith('/fields/')) return true;
+            const ref = o.path.slice('/fields/'.length);
+            if (ADO_SKIP_FIELDS.has(ref)) return false;
+            return !!byRef[ref];
+          });
+          if (ops.length !== antes) console.log(`ℹ️ ${antes - ops.length} campo(s) inexistentes en "${type}" · omitidos al guardar`);
+        }
+      }
+
+      const catalog = await adoGetFieldCatalog();
+      let lastMsg = '';
+      for (let intento = 1; intento <= maxRetries; intento++) {
+        if (!ops.length) { toast('Sin cambios válidos que guardar'); return null; }
+        const res = await fetch(url, {
+          method: 'PATCH', headers: adoHeaders('application/json-patch+json'), body: JSON.stringify(ops)
+        });
+        if (res.ok) return await res.json();
+
+        const txt = await res.text();
+        lastMsg = adoErrMsg(txt);
+        console.warn(`Intento ${intento} — Azure rechazó el guardado:`, lastMsg);
+
+        if ((res.status === 401 || res.status === 203) && intento === 1) {
+          if (await refreshAzureToken()) continue;
+        }
+
+        const info = adoErrField(lastMsg);
+        if (!info) break;
+
+        // Buscar el campo en el esquema (por refName o por nombre visible)
+        let fieldDef = null;
+        if (projectName) {
+          const schema = await adoGetTypeFields(projectName, type);
+          fieldDef = schema.find(f => f.referenceName === info.ref)
+            || schema.find(f => String(f.name).toLowerCase() === info.ref.toLowerCase());
+        }
+        const ref = fieldDef ? fieldDef.referenceName : info.ref;
+
+        // Campo inexistente → quitarlo del lote y reintentar
+        if (info.kind === 'missing' || !fieldDef) {
+          const antes = ops.length;
+          ops = ops.filter(o => o.path !== '/fields/' + ref);
+          if (ops.length === antes) break;
+          console.warn(`→ Campo "${ref}" no existe aquí · omitido`);
+          continue;
+        }
+
+        // Requerido / inválido → completar con default válido
+        const v = adoDefaultValueFor(fieldDef, catalog[ref]);
+        if (v === null || v === undefined) break;
+        const ex = ops.find(o => o.path === '/fields/' + ref);
+        if (ex) { if (ex.value === v) break; ex.value = v; }
+        else ops.push({ op: 'add', path: '/fields/' + ref, value: v });
+        console.warn(`→ Campo requerido "${fieldDef.name}" completado con:`, v);
+      }
+      throw new Error(lastMsg || 'Azure rechazó el guardado');
     }
 
     // ═══════════════ NUEVO: JERARQUÍA (padre / hijos) ═══════════════
