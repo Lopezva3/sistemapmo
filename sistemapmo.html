@@ -5890,6 +5890,9 @@
       const refs = new Set();
       sections.forEach(s => s.refs.forEach(r => refs.add(r)));
       refs.forEach(ref => {
+        // Los campos auto (Puntaje Total) se calculan aparte; no se leen del input
+        // para no enviarlos dos veces en el mismo lote (error VS403691).
+        if (WI_AUTO_FIELDS.includes(ref)) return;
         const el = document.getElementById('wif-' + cssId(ref));
         if (!el) return;
         let newVal;
@@ -5898,8 +5901,6 @@
         let oldVal = _wiEd.fields[ref];
         if (typeof oldVal === 'object' && oldVal !== null) oldVal = oldVal.displayName || oldVal.name || '';
         if (oldVal === undefined || oldVal === null) oldVal = '';
-        // Normalizar para comparar
-        const oldStr = String(oldVal).slice(0, 10) === String(oldVal) ? String(oldVal) : String(oldVal);
         if (String(newVal) === String(oldVal)) return;
         if (WI_BOOL_REFS.includes(ref) && !!oldVal === newVal) return;
         if (ref === 'System.AssignedTo') {
@@ -5907,14 +5908,17 @@
           ops.push({ op: 'add', path: '/fields/' + ref, value: newVal });
           return;
         }
-        ops.push({ op: 'add', path: '/fields/' + ref, value: WI_BOOL_REFS.includes(ref) ? newVal : newVal });
+        ops.push({ op: 'add', path: '/fields/' + ref, value: newVal });
       });
 
-      // Puntaje total recalculado si es Initiative
+      // Puntaje total recalculado si es Initiative (una sola vez)
       if (_wiEd.type === 'Initiative') {
         const vals = IMP_REFS.map(r => document.getElementById('wif-' + cssId(r))?.value || 0);
         const { score } = computeInitiativePrio(vals);
-        ops.push({ op: 'add', path: '/fields/Custom.PuntajeTotal', value: score });
+        const old = parseFloat(_wiEd.fields['Custom.PuntajeTotal']);
+        if (!(Math.abs((old || 0) - score) < 0.001)) {   // solo si cambió
+          ops.push({ op: 'add', path: '/fields/Custom.PuntajeTotal', value: score });
+        }
       }
 
       if (!ops.length) { toast('Sin cambios que guardar'); return; }
@@ -5935,6 +5939,9 @@
     // Si Azure señala un campo inexistente lo descarta; si falta un requerido lo completa; y reintenta.
     async function adoPatchWorkItem(id, type, projectName, ops, maxRetries = 6) {
       const url = `${ADO.baseUrl}/_apis/wit/workitems/${id}?api-version=${ADO.apiVersion}`;
+
+      // Nunca enviar el mismo campo dos veces en un lote (Azure lo rechaza con VS403691)
+      ops = dedupeFieldOps(ops);
 
       // Si conocemos el proyecto, quitamos de entrada los campos que no existen en este tipo
       if (projectName) {
@@ -6348,8 +6355,24 @@
       return null;
     }
 
+    // Deja una sola operación por campo (la última), evitando el error VS403691
+    function dedupeFieldOps(ops) {
+      const seen = {};
+      const out = [];
+      for (let i = ops.length - 1; i >= 0; i--) {
+        const p = ops[i].path;
+        if (p && p.startsWith('/fields/')) {
+          if (seen[p]) continue;
+          seen[p] = true;
+        }
+        out.unshift(ops[i]);
+      }
+      return out;
+    }
+
     // POST con auto-corrección: devuelve el work item creado o lanza error con el mensaje REAL
     async function adoPostWorkItem(projectName, type, ops, maxRetries = 6) {
+      ops = dedupeFieldOps(ops);
       const enc = encodeURIComponent(projectName);
       const url = `${ADO.baseUrl}/${enc}/_apis/wit/workitems/$${encodeURIComponent(type)}?api-version=${ADO.apiVersion}`;
 
