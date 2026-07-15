@@ -5538,6 +5538,9 @@
         _wiEd.fields = data.fields || {};
         _wiEd.relations = data.relations || [];
         _wiEd.rev = data.rev;
+        // Estados reales del proceso (si Azure no responde, usa la lista local)
+        const proj = _wsIni?.adoName || data.fields?.['System.TeamProject'];
+        if (proj) _wiEd.states = await adoGetTypeStates(proj, type);
         document.getElementById('wi-ed-title').textContent = _wiEd.fields['System.Title'] || '#' + id;
         renderWiTab();
       } catch (err) {
@@ -5681,14 +5684,41 @@
       ],
     };
 
+    // ── Estados del flujo de Initiative en Azure (tal cual el dropdown de Azure) ──
+    const ESTADOS_AZURE = [
+      'New', 'Active',
+      'Backlog en Elaboración', 'Backlog Enviado', 'Backlog Aprobado',
+      'En Análisis', 'Estimación Horas',
+      'Elaboración Cotización', 'Cotización Enviada', 'Cotización Aprobada',
+      'En Desarrollo', 'En Desarrollo BI', 'En Desarrollo Progress', 'En Desarrollo Salesforce', 'En Desarrollo SAP',
+      'Pruebas Internas', 'Completado', 'Facturado', 'En Pausa (Stand By)', 'Cancelado',
+    ];
+
     const WI_STATES = {
-      'Initiative': ['New', 'Active', 'Resolved', 'Closed'],
+      'Initiative': ESTADOS_AZURE,
       'Epic': ['New', 'Active', 'Resolved', 'Closed'],
       'Feature': ['New', 'Active', 'Resolved', 'Closed'],
       'User Story': ['New', 'Active', 'Resolved', 'Closed', 'Removed'],
       'Task': ['New', 'Active', 'Closed', 'Removed'],
       'Bug': ['New', 'Active', 'Resolved', 'Closed'],
     };
+
+    // Los estados REALES de cada tipo, leídos del proceso de Azure (respaldo: WI_STATES)
+    const _wiTypeStates = {};   // "proyecto|tipo" → [estados]
+    async function adoGetTypeStates(projectName, type) {
+      const key = `${projectName}|${type}`;
+      if (_wiTypeStates[key]) return _wiTypeStates[key];
+      let lista = [];
+      try {
+        const enc = encodeURIComponent(projectName);
+        const data = await adoFetch(`${ADO.baseUrl}/${enc}/_apis/wit/workitemtypes/${encodeURIComponent(type)}/states?api-version=${ADO.apiVersion}`);
+        lista = (data.value || []).map(s => s.name).filter(Boolean);
+      } catch (e) {
+        console.warn(`No se pudieron leer los estados de "${type}":`, e.message);
+      }
+      _wiTypeStates[key] = lista.length ? lista : (WI_STATES[type] || ['New', 'Active', 'Closed']);
+      return _wiTypeStates[key];
+    }
 
     // ── Prioridad calculada (Impulsores → Puntaje / Criticidad) ─────────
     function computeInitiativePrio(vals) {
@@ -5737,11 +5767,11 @@
         return `<div class="wi-field"><label>${label}</label>
           <label class="wi-switch"><input type="checkbox" id="${id}" ${on ? 'checked' : ''} onchange="wiToggleTxt(this)"><span class="sl"></span><span class="tx">${on ? 'Sí' : 'No'}</span></label></div>`;
       }
-      // Estado → select
+      // Estado → select con los estados reales del proceso de Azure
       if (ref === 'System.State') {
-        const states = WI_STATES[_wiEd.type] || ['New', 'Active', 'Closed'];
+        const states = (_wiEd?.states?.length ? _wiEd.states : (WI_STATES[_wiEd.type] || ['New', 'Active', 'Closed']));
         const cur = val || 'New';
-        const opts = [...new Set([cur, ...states])].map(s => `<option ${s === cur ? 'selected' : ''}>${s}</option>`).join('');
+        const opts = [...new Set([cur, ...states])].map(s => `<option ${s === cur ? 'selected' : ''}>${escapeHtml(s)}</option>`).join('');
         return `<div class="wi-field"><label>${label}</label><select id="${id}">${opts}</select></div>`;
       }
       // Dropdowns con listas fijas de Azure (Empresa, Líder Ágil, Líder Comercial, Área, Criticidad)
@@ -6715,7 +6745,7 @@
     const CRITICIDADES = ['Alta', 'Baja', 'Media', 'Muy alta'];
     const AREAS_EJECUCION = ['BA', 'Cliente', 'Comercial', 'Desarrollo', 'Implementación & Soporte', 'Integración & Progress', 'Proveedor', 'Proyectos', 'QA', 'Seguridad'];
     const COMERCIALES = ['Emily Rojas', 'Johan Tarco', 'Karolina Jacome', 'Luis Wandemberg'];
-    const ESTADOS = ['New', 'Active', 'Backlog en Elaboración', 'Backlog Enviado', 'Backlog Aprobado', 'En Análisis', 'Estimación Horas', 'Elaboración Cotización', 'Cotización Enviada', 'Cotización Aprobada', 'En Desarrollo', 'En Desarrollo BI', 'En Desarrollo Progress', 'En Desarrollo Salesforce', 'En Desarrollo SAP', 'Pruebas Internas', 'Completado', 'Facturado', 'En Pausa (Stand By)', 'Cancelado'];
+    const ESTADOS = ESTADOS_AZURE;   // misma lista que usa el editor de work item
 
     let _editImps = [];
     function openEditMode() {
