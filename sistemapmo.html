@@ -8010,14 +8010,18 @@ ${currentUserName()}`;
           ${p.status === 'pending' ? `
           <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap">
             <div style="font-size:10.5px;color:var(--tx3)">
-              ${p.items.filter(x=>x.decision==='approved').length > 0 ? `✓ ${p.items.filter(x=>x.decision==='approved').length} aprobados · ` : ''}
-              ${p.items.filter(x=>x.decision==='rejected').length > 0 ? `✗ ${p.items.filter(x=>x.decision==='rejected').length} rechazados · ` : ''}
-              ${p.items.filter(x=>!x.decision).length} pendientes
+              ${p.items.filter(x=>x.decision==='approved').length > 0 ? `✓ ${p.items.filter(x=>x.decision==='approved').length} aprobado(s) · ` : ''}
+              ${p.items.filter(x=>x.decision==='rejected').length > 0 ? `✗ ${p.items.filter(x=>x.decision==='rejected').length} rechazado(s) · ` : ''}
+              ${p.items.filter(x=>!x.decision).length} pendiente(s)
             </div>
-            <div style="display:flex;gap:8px">
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              ${p.items.some(x=>x.decision) ? `<button class="btn btn-info btn-sm" onclick="notificarDecisionPMParcial(${p.id})" style="display:flex;align-items:center;gap:4px"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg> Notificar al PM</button>` : ''}
               <button class="btn btn-danger btn-sm" onclick="rejectProposal(${p.id})">✕ Rechazar todo</button>
               <button class="btn btn-success btn-sm" onclick="approveProposal(${p.id})">✓ Aprobar todo</button>
             </div>
+          </div>` : p.status !== 'pending' ? `
+          <div style="display:flex;justify-content:flex-end;margin-top:8px">
+            <button class="btn btn-default btn-sm" onclick="notificarDecisionPMParcial(${p.id})" style="display:flex;align-items:center;gap:4px;font-size:11px"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg> Reenviar notificación</button>
           </div>` : ''}
         </div>`;
       }).join('');
@@ -8127,6 +8131,42 @@ ${currentUserName()}`;
       renderBandeja();
       toast('Propuesta rechazada');
       notificarDecisionPM(p, 'rechazada');
+    }
+
+    // Notificar al PM con el estado parcial o total de la propuesta
+    function notificarDecisionPMParcial(propId) {
+      const props = loadProposals();
+      const p = props.find(x => x.id === propId);
+      if (!p) return;
+      if (!p.pmEmail) { toast('La propuesta no tiene correo del PM registrado'); return; }
+
+      const pfTxt = pfLabel(p.portfolio);
+      const aprobados = p.items.filter(x => x.decision === 'approved');
+      const rechazados = p.items.filter(x => x.decision === 'rejected');
+      const pendientes = p.items.filter(x => !x.decision);
+      const esTotal = pendientes.length === 0;
+
+      const listaAprobados = aprobados.map(it => `  ✓ ${it.codigo || ''} — ${it.nombre || ''}`).join('\n');
+      const listaRechazados = rechazados.map(it => `  ✗ ${it.codigo || ''} — ${it.nombre || ''}`).join('\n');
+      const listaPendientes = pendientes.map(it => `  · ${it.codigo || ''} — ${it.nombre || ''}`).join('\n');
+
+      const asunto = `Decisión de Priorización${esTotal ? ' FINAL' : ' (parcial)'} — ${pfTxt}${p.sprint ? ' · ' + p.sprint : ''}`;
+      const cuerpo = `Estimado/a ${p.pm || 'PM'}:
+
+Le informo el estado de su propuesta de priorización${esTotal ? ' (decisión final)' : ' (decisión parcial — algunos proyectos aún están en revisión)'}.
+
+Portafolio: ${pfTxt}
+Sprint destino: ${p.sprint || '(por definir)'}
+${aprobados.length ? `\nPROYECTOS APROBADOS (${aprobados.length}):\n${listaAprobados}` : ''}${rechazados.length ? `\n\nPROYECTOS NO PRIORIZADOS (${rechazados.length}):\n${listaRechazados}` : ''}${pendientes.length ? `\n\nEN REVISIÓN (${pendientes.length}):\n${listaPendientes}` : ''}
+
+${aprobados.length ? 'Los proyectos aprobados han sido asignados al sprint indicado. Puede continuar con la planificación.' : ''}
+${rechazados.length && !aprobados.length ? 'Por el momento estos proyectos no fueron priorizados. Quedo atento/a para conversar los detalles.' : ''}
+
+Saludos cordiales,
+${currentUserName()}
+Administrador PMO — EOS Tech Company`;
+
+      window.location.href = `mailto:${p.pmEmail}?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`;
     }
 
     // Abrir correo al PM avisando la decisión (aprobada / rechazada)
