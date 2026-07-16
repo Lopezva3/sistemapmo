@@ -2783,7 +2783,7 @@
             <line x1="12" y1="20" x2="12" y2="4" />
             <line x1="6" y1="20" x2="6" y2="14" />
           </svg>
-          <span>Mi Priorización</span>
+          <span>Radar de Proyectos</span>
         </button>
         <button class="nav-btn" id="nav-historial" onclick="nav('historial',this)">
           <svg viewBox="0 0 24 24">
@@ -3391,7 +3391,7 @@
           <div
             style="margin-bottom:16px;display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px">
             <div>
-              <div style="font-size:13.5px;font-weight:600">Mi Priorización</div>
+              <div style="font-size:13.5px;font-weight:600">Radar de Proyectos</div>
               <div style="font-size:11.5px;color:var(--tx3);margin-top:2px">Tus iniciativas que cumplen criterios de
                 priorización — arrastra para reordenar</div>
             </div>
@@ -3524,7 +3524,7 @@
               <span style="font-size:11px;color:var(--tx3)">Selecciona un proyecto y el documento que quieres generar</span>
             </div>
             <div style="padding:16px 18px">
-              <div style="display:flex;gap:12px;margin-bottom:16px">
+              <div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap">
                 <div class="ia-type-card" id="ia-type-backlog" onclick="setIaType('backlog')">
                   <div class="ia-type-icon">📋</div>
                   <div>
@@ -3537,6 +3537,13 @@
                   <div>
                     <div class="ia-type-title">Matriz de Riesgos <span style="font-size:10px;color:#1a7a4a;font-weight:600">· Excel</span></div>
                     <div class="ia-type-desc">Rellena el Registro de Riesgos oficial (.xlsx): categoría, probabilidad, impacto, plazo, exposición y severidad calculadas, plan de respuesta y contingencia.</div>
+                  </div>
+                </div>
+                <div class="ia-type-card" id="ia-type-product-backlog" onclick="setIaType('product-backlog')">
+                  <div class="ia-type-icon">📊</div>
+                  <div>
+                    <div class="ia-type-title">Product Backlog <span style="font-size:10px;color:#1a7a4a;font-weight:600">· Excel</span></div>
+                    <div class="ia-type-desc">Lee las Épicas, Features, Historias de Usuario y Tasks REALES de Azure y las vuelca en la plantilla oficial del Product Backlog (.xlsx).</div>
                   </div>
                 </div>
               </div>
@@ -3625,16 +3632,15 @@
           </svg>
           Configurar API de Claude
         </div>
-        <div class="modal-desc">Para generar backlogs con IA, ingresa tu API Key de Anthropic. Se guardará localmente en
-          tu navegador.</div>
+        <div class="modal-desc">La generación con IA ahora usa una clave protegida en el servidor. No necesitas
+          configurar nada aquí.</div>
         <div class="fg" style="margin-bottom:4px">
-          <label class="flabel">API Key de Anthropic</label>
-          <input class="finput" type="password" id="apikey-input" placeholder="sk-ant-api03-...">
+          <label class="flabel">API Key de Anthropic (ya no se usa desde el navegador)</label>
+          <input class="finput" type="password" id="apikey-input" placeholder="Gestionada en el servidor" disabled>
         </div>
         <div class="apikey-note">
-          <strong>⚠️ Seguridad</strong>
-          Esta clave se almacena solo en tu navegador (localStorage) y se envía directamente a api.anthropic.com. No la
-          compartas con nadie.
+          <strong>🔒 Seguridad</strong>
+          La clave de la IA vive de forma segura en el servidor de Netlify y nunca se envía desde tu navegador.
         </div>
         <div class="modal-actions">
           <button class="btn btn-default btn-sm" onclick="closeApiKeyModal()">Cancelar</button>
@@ -6699,7 +6705,7 @@
       dashboard: ['Dashboard', 'Portafolio de iniciativas'],
       nueva: ['Nueva Iniciativa', 'Intake de proyecto — 4 pasos'],
       historial: ['Historial de Sprints', 'Snapshots por portafolio'],
-      priorizacion: ['Mi Priorización', 'Iniciativas que cumplen criterios'],
+      priorizacion: ['Radar de Proyectos', 'Iniciativas que cumplen criterios'],
       archivados: ['Archivados', 'Iniciativas archivadas'],
       proponer: ['Proponer Priorización', 'Propuestas al administrador PMO'],
       bandeja: ['Priorización Sprint', 'Aprobación de propuestas'],
@@ -7347,16 +7353,10 @@ Estructura requerida:
     }
 
     async function callBacklogAPI(ini) {
-      const key = localStorage.getItem(APIKEY_STORAGE);
       try {
-        const res = await fetch('https://api.anthropic.com/v1/messages', {
+        const res = await fetch('/.netlify/functions/anthropic', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': key,
-            'anthropic-version': '2023-06-01',
-            'anthropic-dangerous-direct-browser-access': 'true',
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             model: 'claude-opus-4-6',
             max_tokens: 4000,
@@ -7364,7 +7364,7 @@ Estructura requerida:
           }),
         });
         const data = await res.json();
-        if (data.error) throw new Error(data.error.message || 'Error de API');
+        if (data.error) throw new Error(data.error.message || data.error || 'Error de API');
         const html = (data.content || []).filter(c => c.type === 'text').map(c => c.text).join('\n')
           .replace(/```html|```/g, '').trim();
         renderBacklogContent(ini, html);
@@ -7984,20 +7984,40 @@ ${currentUserName()}`;
             <span class="prop-status-badge ${p.status}" style="margin-left:8px">${p.status === 'pending' ? 'Pendiente' : p.status === 'approved' ? 'Aprobada' : 'Rechazada'}</span>
           </div>
           <ul class="drag-list" id="drag-list-${p.id}">
-            ${p.items.map(it => `
-              <li class="drag-item" data-iid="${it.iniId}">
+            ${p.items.map(it => {
+              const dec = it.decision;
+              const decBadge = dec === 'approved'
+                ? `<span style="font-size:10px;font-weight:700;color:#1a7a4a;background:#e6f4ee;border:1px solid #a3d9b8;border-radius:20px;padding:2px 8px;margin-right:4px">✓ Aprobado</span>`
+                : dec === 'rejected'
+                  ? `<span style="font-size:10px;font-weight:700;color:#b23;background:#fbe9e7;border:1px solid #f4a9a8;border-radius:20px;padding:2px 8px;margin-right:4px">✗ Rechazado</span>`
+                  : '';
+              const btns = (p.status === 'pending' && !dec)
+                ? `<button class="btn btn-sm" onclick="decideItem(${p.id},${it.iniId},'rejected')" style="padding:2px 8px;font-size:10px;color:#b23;border:1px solid #f4a9a8;background:#fbe9e7;border-radius:5px;margin-right:4px" title="Rechazar solo esta iniciativa">✗</button>
+                   <button class="btn btn-sm" onclick="decideItem(${p.id},${it.iniId},'approved')" style="padding:2px 8px;font-size:10px;color:#1a7a4a;border:1px solid #a3d9b8;background:#e6f4ee;border-radius:5px" title="Aprobar solo esta iniciativa">✓</button>`
+                : '';
+              return `
+              <li class="drag-item" data-iid="${it.iniId}" style="${dec === 'rejected' ? 'opacity:.55' : ''}">
                 <span class="drag-handle">⋮⋮</span>
-                <span class="drag-rank" style="background:#4F3A6B">${it.rank}</span>
+                <span class="drag-rank" style="background:${dec === 'approved' ? '#1a7a4a' : dec === 'rejected' ? '#b23' : '#4F3A6B'}">${it.rank}</span>
                 <span class="drag-code">${escapeHtml(it.codigo || '')}</span>
-                <span class="drag-name">${escapeHtml(it.nombre || '')}</span>
+                <span class="drag-name" style="flex:1">${escapeHtml(it.nombre || '')}</span>
                 <span class="drag-score">${(it.score || 0).toFixed(2)}</span>
-                ${p.status === 'pending' ? `<button class="drag-remove" onclick="removePropInit(${p.id},${it.iniId})">✕</button>` : ''}
-              </li>`).join('')}
+                ${decBadge}${btns}
+                ${p.status === 'pending' && !dec ? `<button class="drag-remove" onclick="removePropInit(${p.id},${it.iniId})">✕</button>` : ''}
+              </li>`;
+            }).join('')}
           </ul>
           ${p.status === 'pending' ? `
-          <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px">
-            <button class="btn btn-danger btn-sm" onclick="rejectProposal(${p.id})">✕ Rechazar</button>
-            <button class="btn btn-success btn-sm" onclick="approveProposal(${p.id})">✓ Aprobar propuesta</button>
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap">
+            <div style="font-size:10.5px;color:var(--tx3)">
+              ${p.items.filter(x=>x.decision==='approved').length > 0 ? `✓ ${p.items.filter(x=>x.decision==='approved').length} aprobados · ` : ''}
+              ${p.items.filter(x=>x.decision==='rejected').length > 0 ? `✗ ${p.items.filter(x=>x.decision==='rejected').length} rechazados · ` : ''}
+              ${p.items.filter(x=>!x.decision).length} pendientes
+            </div>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-danger btn-sm" onclick="rejectProposal(${p.id})">✕ Rechazar todo</button>
+              <button class="btn btn-success btn-sm" onclick="approveProposal(${p.id})">✓ Aprobar todo</button>
+            </div>
           </div>` : ''}
         </div>`;
       }).join('');
@@ -8033,18 +8053,60 @@ ${currentUserName()}`;
       saveProposals(props);
       renderBandeja();
     }
+    // Aprobar o rechazar un ÍTEM individual dentro de una propuesta
+    function decideItem(propId, iniId, decision) {
+      const props = loadProposals();
+      const p = props.find(x => x.id === propId); if (!p) return;
+      const it = p.items.find(x => x.iniId === iniId); if (!it) return;
+
+      it.decision = decision;   // 'approved' | 'rejected'
+      it.decidedAt = new Date().toISOString();
+
+      if (decision === 'approved') {
+        // Asignar sprint a esa iniciativa
+        const ini = iniciativas.find(i => i.id === iniId);
+        if (ini) {
+          ini.sprintLabel = p.sprint || ini.sprintLabel;
+          saveData();
+        }
+      }
+
+      // ¿Todos los ítems ya tienen decisión? → cerrar la propuesta
+      const pendientes = p.items.filter(x => !x.decision);
+      if (!pendientes.length) {
+        const aprobados = p.items.filter(x => x.decision === 'approved').length;
+        p.status = aprobados === p.items.length ? 'approved' : aprobados > 0 ? 'partial' : 'rejected';
+        saveProposals(props);
+        updateBandejaBadge();
+        renderBandeja();
+        refreshSprintFilters();
+        renderDashboard();
+        const msg = aprobados === p.items.length
+          ? `✓ Todos los proyectos aprobados${p.sprint ? ' → ' + p.sprint : ''}`
+          : aprobados > 0
+            ? `✓ ${aprobados} aprobados, ${p.items.length - aprobados} rechazados`
+            : 'Propuesta rechazada completamente';
+        toast(msg);
+        notificarDecisionPM(p, p.status === 'rejected' ? 'rechazada' : 'aprobada');
+      } else {
+        saveProposals(props);
+        renderBandeja();
+        toast(decision === 'approved' ? `✓ ${it.codigo || it.nombre} aprobado` : `✗ ${it.codigo || it.nombre} rechazado`);
+      }
+    }
+
+    // Aprobar TODOS los ítems de golpe (botón "Aprobar propuesta")
     function approveProposal(propId) {
       const props = loadProposals();
       const p = props.find(x => x.id === propId); if (!p) return;
-      if (!p.sprint) {
-        if (!confirm('Esta propuesta no tiene sprint destino.\n\nSi la apruebas así, las iniciativas NO quedarán asignadas a ningún sprint.\n¿Continuar de todos modos?')) return;
-      }
-      p.status = 'approved';
-      // Asignar sprint aprobado a las iniciativas
+      if (!p.sprint && !confirm('Esta propuesta no tiene sprint destino.\n¿Aprobar de todos modos?')) return;
       p.items.forEach(it => {
+        it.decision = 'approved';
+        it.decidedAt = new Date().toISOString();
         const ini = iniciativas.find(i => i.id === it.iniId);
         if (ini) ini.sprintLabel = p.sprint || ini.sprintLabel;
       });
+      p.status = 'approved';
       saveProposals(props);
       saveData();
       updateBandejaBadge();
@@ -8054,9 +8116,11 @@ ${currentUserName()}`;
       toast(p.sprint ? `Propuesta aprobada ✓ — ${p.sprint} asignado a las iniciativas` : 'Propuesta aprobada ✓');
       notificarDecisionPM(p, 'aprobada');
     }
+
     function rejectProposal(propId) {
       const props = loadProposals();
       const p = props.find(x => x.id === propId); if (!p) return;
+      p.items.forEach(it => { it.decision = 'rejected'; it.decidedAt = new Date().toISOString(); });
       p.status = 'rejected';
       saveProposals(props);
       updateBandejaBadge();
@@ -8106,20 +8170,16 @@ Administrador PMO — EOS Tech Company`;
       renderIaApiStatus();
     }
 
-    // Estado de la API Key (solo visible para administradores, dentro de esta pantalla)
+    // Estado de la API (la clave vive de forma segura en el servidor de Netlify)
     function renderIaApiStatus() {
       const el = document.getElementById('ia-api-status');
       if (!el) return;
-      const key = localStorage.getItem(APIKEY_STORAGE);
-      el.innerHTML = key
-        ? `<span style="color:#1a7a4a">●</span> API conectada
-           <a href="#" onclick="showApiKeyModal(renderIaApiStatus);return false;" style="color:#4F3A6B;font-weight:600;margin-left:4px">Cambiar clave</a>`
-        : `<span style="color:#C0392B">●</span> API no configurada
-           <a href="#" onclick="showApiKeyModal(renderIaApiStatus);return false;" style="color:#4F3A6B;font-weight:600;margin-left:4px">Configurar clave</a>`;
+      el.innerHTML = `<span style="color:#1a7a4a">●</span> IA conectada de forma segura
+        <span style="color:var(--tx3);margin-left:4px">· clave protegida en el servidor</span>`;
     }
     function setIaType(t) {
       _iaType = t;
-      ['backlog', 'riesgos'].forEach(k => {
+      ['backlog', 'riesgos', 'product-backlog'].forEach(k => {
         const el = document.getElementById('ia-type-' + k);
         if (el) el.classList.toggle('active', k === t);
       });
@@ -8292,6 +8352,220 @@ Administrador PMO — EOS Tech Company`;
       setTimeout(() => URL.revokeObjectURL(a.href), 2000);
     }
 
+    // ═══════════════════════════════════════════════════════════════════
+    //  PRODUCT BACKLOG EXCEL — Plantilla oficial APMO
+    //  Lee los work items REALES de Azure y genera el Excel con el mismo
+    //  formato de Product_Backlog_Auriga (encabezado + 15 columnas).
+    // ═══════════════════════════════════════════════════════════════════
+    async function generarProductBacklogExcel(ini, wiItems) {
+      const bl = document.getElementById('bl-body');
+      try {
+        // 1) Construir la jerarquía real de Azure: Epic → Feature → UserStory → Task
+        const epics = [], features = {}, stories = {}, tasks = {};
+        if (wiItems && wiItems.length) {
+          wiItems.forEach(wi => {
+            const t = (wi.tipo || '').toLowerCase();
+            if (t === 'epic')       epics.push(wi);
+            else if (t === 'feature') (features[wi.parentId] = features[wi.parentId] || []).push(wi);
+            else if (t === 'user story') (stories[wi.parentId] = stories[wi.parentId] || []).push(wi);
+            else if (t === 'task')   (tasks[wi.parentId] = tasks[wi.parentId] || []).push(wi);
+          });
+        }
+
+        // 2) Si hay datos de Azure, usar la IA solo para enriquecer los campos que Azure no trae
+        //    Si no hay datos, generar todo con IA
+        let rows = [];
+        if (wiItems && wiItems.length > 0) {
+          rows = await enrichProductBacklogWithIA(ini, wiItems);
+        } else {
+          rows = await generateProductBacklogWithIA(ini);
+        }
+        if (!rows || !rows.length) throw new Error('La IA no devolvió filas para el Product Backlog');
+
+        // 3) Generar el Excel con XLSX.js (ya cargado en el sistema)
+        if (typeof XLSX === 'undefined') throw new Error('Librería XLSX no disponible');
+        const wb = XLSX.utils.book_new();
+        const wsData = [];
+
+        // Encabezado (filas 1-6 tal cual la plantilla Auriga)
+        wsData.push(['OFICINA DE ADMINISTRACIÓN ÁGIL DE PROYECTOS (APMO)']);
+        wsData.push(['PROCESO ÁGIL EOS']);
+        wsData.push(['GESTIÓN DE PROYECTO']);
+        wsData.push(['PRODUCT BACKLOG: EPICS, FEATURES & USER STORIES']);
+        wsData.push(['Versión Plantilla 1.0']);
+        wsData.push([`PROYECTO: ${ini.nombre || '—'}`, '', '', '', '', '', '', '', '', '', '', '', '', '', `CLIENTE: ${ini.empresa || '—'}`]);
+        wsData.push([]); // fila 7 vacía
+
+        // Fila de cabeceras (fila 8)
+        wsData.push([
+          '#Épica', 'Épica', '#Feature', 'Feature', '#US', 'Historia de Usuario',
+          'Descripción HU (Como/Quiero/Para)', 'Criterios de Aceptación',
+          'Definición de Listo (DoR)', 'Definición de Hecho (DoD)',
+          'Dependencias', 'Etiquetas', 'Prioridad', 'Módulo', 'Comentarios'
+        ]);
+
+        // Filas de datos
+        rows.forEach(r => {
+          wsData.push([
+            r.epicId || '', r.epicName || '', r.featureId || '', r.featureName || '',
+            r.storyId || '', r.storyName || '', r.storyDesc || '', r.acceptance || '',
+            r.dor || '', r.dod || '', r.dependencies || '', r.tags || '',
+            r.priority || '', r.module || '', r.comments || ''
+          ]);
+        });
+
+        const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+        // Anchos de columna (igual que la plantilla Auriga)
+        ws['!cols'] = [
+          {wch:8},{wch:32},{wch:10},{wch:30},{wch:8},{wch:38},
+          {wch:55},{wch:55},{wch:40},{wch:40},
+          {wch:30},{wch:24},{wch:10},{wch:30},{wch:40}
+        ];
+
+        // Estilos simples (colores de cabecera corporativa)
+        const headerStyle = { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: '2E2248' } }, alignment: { wrapText: true, vertical: 'center', horizontal: 'center' } };
+        const titleStyle  = { font: { bold: true, sz: 12, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: '4F3A6B' } }, alignment: { horizontal: 'center', vertical: 'center' } };
+
+        // Aplicar estilo a encabezado (filas 1-6)
+        for (let r = 0; r < 6; r++) {
+          for (let c = 0; c < 15; c++) {
+            const ref = XLSX.utils.encode_cell({ r, c });
+            if (!ws[ref]) ws[ref] = { v: '', t: 's' };
+            ws[ref].s = titleStyle;
+          }
+        }
+        // Aplicar estilo a fila de cabeceras (fila 8, índice 7)
+        for (let c = 0; c < 15; c++) {
+          const ref = XLSX.utils.encode_cell({ r: 7, c });
+          if (!ws[ref]) ws[ref] = { v: '', t: 's' };
+          ws[ref].s = headerStyle;
+        }
+
+        XLSX.utils.book_append_sheet(wb, ws, 'Product Backlog');
+
+        // Descargar
+        const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array', cellStyles: true });
+        const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        const fn = `ProductBacklog_${ini.codigo || ini.empresa || 'PMO'}_${new Date().toISOString().slice(0,10)}.xlsx`;
+        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = fn;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+
+        bl.innerHTML = `<div class="bl-doc-area"><div class="bl-page" style="text-align:center;padding:60px 30px">
+          <div style="font-size:40px;margin-bottom:12px">✅</div>
+          <div style="font-size:16px;font-weight:700;color:#2E2248">Product Backlog generado</div>
+          <div style="font-size:13px;color:var(--tx3);margin-top:8px">${rows.length} filas exportadas · ${fn}</div>
+          <div style="font-size:11px;color:var(--tx3);margin-top:16px">El archivo se ha descargado automáticamente a tu PC.</div>
+        </div></div>`;
+      } catch (err) {
+        console.error('generarProductBacklogExcel:', err);
+        bl.innerHTML = `<div class="bl-doc-area"><div class="bl-page"><div class="bl-error">⚠️ No se pudo generar el Product Backlog:<br><b>${escapeHtml(err.message)}</b></div></div></div>`;
+      }
+    }
+
+    // Enriquecer los work items REALES de Azure con los campos que faltan (DoR, DoD, módulo, etc.)
+    async function enrichProductBacklogWithIA(ini, wiItems) {
+      // Construir el resumen de items por jerarquía para el prompt
+      const epicMap = {}, featureMap = {};
+      const epics = [], features = [], stories = [];
+      wiItems.forEach(wi => {
+        const t = (wi.tipo || '').toLowerCase();
+        if (t === 'epic') { epics.push(wi); epicMap[wi.id] = wi; }
+        else if (t === 'feature') { features.push(wi); featureMap[wi.id] = wi; }
+        else if (t === 'user story') stories.push(wi);
+      });
+
+      const jerarquia = epics.map(ep => {
+        const fts = features.filter(f => f.parentId === ep.id || f.epicTitle === ep.titulo);
+        return `ÉPICA: ${ep.titulo}\n` + fts.map(ft => {
+          const sts = stories.filter(s => s.parentId === ft.id || s.featureTitle === ft.titulo);
+          return `  FEATURE: ${ft.titulo}\n` + sts.map(s =>
+            `    US: ${s.titulo}${s.descripcion ? ' — ' + s.descripcion.slice(0, 120) : ''}`
+          ).join('\n');
+        }).join('\n');
+      }).join('\n\n');
+
+      const prompt = `Eres un consultor PMO ágil de EOS Tech Company. Tienes la jerarquía REAL de work items de Azure DevOps del proyecto "${ini.nombre}" (${ini.empresa}).
+
+JERARQUÍA REAL DEL PROYECTO EN AZURE:
+${jerarquia || 'No se pudieron leer los work items. Genera en base a la descripción del proyecto.'}
+
+DESCRIPCIÓN DEL PROYECTO: ${ini.descripcion || '—'}
+TECNOLOGÍAS: ${techTags(ini)}
+
+Genera EXACTAMENTE las filas del Product Backlog oficial (plantilla APMO) en formato JSON.
+Por cada Historia de Usuario, genera una fila con estos campos:
+- epicId: código de la épica (EP-01, EP-02, etc. según orden de aparición)
+- epicName: nombre de la épica
+- featureId: código de la feature (FE-01, FE-02, etc.)
+- featureName: nombre de la feature
+- storyId: código de la historia (HU-001, HU-002, etc.)
+- storyName: título corto de la historia
+- storyDesc: descripción "Como [rol], quiero [acción], para [beneficio]"
+- acceptance: criterios de aceptación concretos y verificables
+- dor: Definición de Listo (DoR) — qué debe estar listo ANTES de trabajar esta historia
+- dod: Definición de Hecho (DoD) — cómo saber que está TERMINADA
+- dependencies: dependencias (vacío si no hay)
+- tags: etiquetas separadas por punto y coma (tecnología, módulo, área)
+- priority: número de prioridad (1=alta, 2=media, 3=baja)
+- module: nombre del módulo al que pertenece
+- comments: observación breve sobre la épica/priorización (puede repetirse por épica)
+
+REGLAS:
+- Responde SOLO con un array JSON válido, sin markdown ni backticks
+- Basa el contenido en los work items REALES. Enriquece los campos vacíos con criterios profesionales.
+- El término es "épica" (femenino), no "épico"
+- Genera mínimo una fila por cada Historia de Usuario real, máximo 150 filas en total
+- Si hay demasiadas historias, prioriza las de mayor importancia
+
+Responde SOLO el array JSON:`;
+
+      const res = await fetch('/.netlify/functions/anthropic', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 8000,
+          messages: [{ role: 'user', content: prompt }],
+        }),
+      });
+      if (!res.ok) throw new Error('Error IA: ' + res.status);
+      const data = await res.json();
+      const txt = (data.content || []).filter(c => c.type === 'text').map(c => c.text).join('');
+      const clean = txt.replace(/```json|```/g, '').trim();
+      return JSON.parse(clean);
+    }
+
+    // Generar Product Backlog completo con IA cuando no hay datos de Azure
+    async function generateProductBacklogWithIA(ini) {
+      const prompt = `Eres un consultor PMO ágil de EOS Tech Company. Genera el Product Backlog completo para el proyecto "${ini.nombre}" (${ini.empresa}).
+
+DESCRIPCIÓN: ${ini.descripcion || '—'}
+TECNOLOGÍAS: ${techTags(ini)}
+ÁREA: ${ini.area || '—'}
+
+Genera las filas del Product Backlog oficial (plantilla APMO). Misma estructura que antes.
+Genera entre 15 y 40 filas representativas con épicas, features e historias de usuario coherentes.
+
+Responde SOLO el array JSON (sin markdown, sin backticks):`;
+
+      const res = await fetch('/.netlify/functions/anthropic', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 6000,
+          messages: [{ role: 'user', content: prompt }],
+        }),
+      });
+      if (!res.ok) throw new Error('Error IA: ' + res.status);
+      const data = await res.json();
+      const txt = (data.content || []).filter(c => c.type === 'text').map(c => c.text).join('');
+      const clean = txt.replace(/```json|```/g, '').trim();
+      return JSON.parse(clean);
+    }
+
     // ── Prompts: la IA devuelve JSON, no HTML ────────────────────────────
 
     // Lee los work items REALES del proyecto en Azure (Epics/Features/Stories/Tasks/Bugs)
@@ -8364,8 +8638,7 @@ Proyecto: ${ini.nombre || '—'}
 Descripción: ${ini.descripcion || 'No especificada'}
 Solicitante: ${ini.solicitante || '—'}
 Área: ${ini.area || '—'}
-PM a cargo (Líder Ágil): ${ini.liderAgil || '—'}
-Líder Comercial: ${ini.liderCom || '—'}
+Liderado por: Líder Ágil · Respaldo: Líder Comercial
 Tecnologías/Plataformas: ${techTags(ini)}
 Horas planificadas: ${ini.horas ?? '—'}
 Costo planificado: ${ini.costoPlanificado ?? ini.costo ?? '—'} USD
@@ -8384,9 +8657,9 @@ Si algún dato no existe (fechas, costos, etc.), NO lo inventes: descríbelo com
 {
   "justificacion": "Situación actual, problemas concretos del proceso y por qué se necesita el proyecto. Sé específico con los dolores actuales. 2-3 párrafos.",
   "evaluacion": "Explica los 7 impulsores de cartera con el puntaje asignado a este proyecto y su justificación. Formato: 'Transformación Tecnológica (20%): 4 - motivo'. Termina con el puntaje total y la criticidad.",
-  "objetivos": "Objetivos SMART. Una línea por letra:\\nS: ...\\nM: ...\\nA: ...\\nR: ...\\nT: ...",
-  "stakeholders": "Actores relevantes. Por cada uno: nombre del rol en una línea y su descripción/afectación en la línea siguiente.",
-  "situacion": "Estado objetivo descrito en formato ágil (historias de usuario / features). Qué se espera lograr.",
+  "objetivos": "Objetivos SMART. Liderado por el Líder Ágil con el respaldo del Líder Comercial. NUNCA uses nombres propios, solo roles. Una línea por letra:\\nS: ...\\nM: ...\\nA: ...\\nR: ...\\nT: ...",
+  "stakeholders": "Actores relevantes. Por cada uno: nombre del ROL en una línea y su descripción/afectación en la siguiente. NUNCA uses nombres propios de personas.",
+  "situacion": "Estado objetivo descrito en formato ágil (historias de usuario / épicas). Qué se espera lograr.",
   "criterios": "Criterios de aceptación verificables, uno por línea, numerados.",
   "desglose": "Componentes funcionales\\n(lista)\\n\\nComponentes no funcionales\\n(lista)",
   "backlog": [
@@ -8400,12 +8673,13 @@ Si algún dato no existe (fechas, costos, etc.), NO lo inventes: descríbelo com
 REGLAS IMPORTANTES:
 - "backlog" es un ARRAY con 10 a 14 historias de usuario. Cada elemento solo lleva "historia" y "rol".
   NO incluyas prioridad: esa columna se completa manualmente después.
-- Si el proyecto YA TIENE work items reales en Azure (ver arriba), basa el backlog y el desglose en ESE trabajo real,
-  reflejando las Features e historias que ya existen; complementa solo con lo que falte de forma coherente.
-- "evaluacion" es solo la justificación en texto de por qué se asignó cada puntaje. NO repitas la tabla
-  de calificaciones: la plantilla ya la trae y se llena con los datos reales del sistema.
+- NUNCA mentions nombres propios de personas en NINGUNA sección. Solo usa roles:
+  "Líder Ágil", "Líder Comercial", "Administrador PMO", "Equipo de Desarrollo", "Solicitante", etc.
+- El término correcto es "épicas" (femenino), no "épicos". Úsalo correctamente en todo el documento.
+- "evaluacion" es solo la justificación en texto. NO repitas la tabla de calificaciones.
+- Si el proyecto YA TIENE work items reales en Azure, basa el backlog y el desglose en ESE trabajo real.
 
-Basa TODO el contenido en los datos reales del proyecto. Sé concreto y profesional, como un PMO con experiencia.`;
+Basa TODO el contenido en los datos reales del proyecto. Sé concreto y profesional.`;
     }
 
     function promptRiesgos(ini, wiResumen) {
@@ -8468,13 +8742,12 @@ Piensa como PMO experimentado: riesgos técnicos, de integración, de alcance, d
     // ── Llamada a la IA y generación del archivo ─────────────────────────
     async function generarDocIA() {
       if (!_iaProject) { toast('Selecciona un proyecto'); return; }
-      const key = localStorage.getItem(APIKEY_STORAGE);
-      if (!key) { showApiKeyModal(() => generarDocIA()); return; }
 
       const ini = _iaProject;
       const esBacklog = _iaType === 'backlog';
-      const titulo = esBacklog ? 'Backlog de Iniciativa' : 'Matriz de Riesgos';
-      const formato = esBacklog ? 'Word (.docx)' : 'Excel (.xlsx)';
+      const esProductBacklog = _iaType === 'product-backlog';
+      const titulo = esBacklog ? 'Backlog de Iniciativa' : esProductBacklog ? 'Product Backlog' : 'Matriz de Riesgos';
+      const formato = (esBacklog) ? 'Word (.docx)' : 'Excel (.xlsx)';
 
       document.getElementById('bl-topbar-title').textContent = `${titulo} — ${ini.codigo || ''}`;
       document.getElementById('bl-topbar-sub').textContent = `${ini.empresa || ''} · ${ini.nombre || ''}`;
@@ -8482,24 +8755,24 @@ Piensa como PMO experimentado: riesgos técnicos, de integración, de alcance, d
         <div class="bl-loading">
           <div class="bl-spinner"></div>
           <div class="bl-loading-msg">Generando ${titulo.toLowerCase()} con IA...</div>
-          <div class="bl-loading-sub">Analizando el proyecto real en Azure y rellenando la plantilla ${formato} (30-90 segundos)</div>
+          <div class="bl-loading-sub">Leyendo datos reales de Azure DevOps y rellenando la plantilla ${formato} (30-90 segundos)</div>
         </div>`;
       document.getElementById('bl-overlay').classList.add('open');
 
       try {
-        // Leer los work items REALES del proyecto en Azure para que la IA los analice
         const projName = ini.adoName || window._targetAdoProject || null;
         const wiItems = await fetchAdoWorkItemsForIA(projName);
         const wiResumen = resumenWorkItems(wiItems);
 
-        const res = await fetch('https://api.anthropic.com/v1/messages', {
+        // Para Product Backlog: necesitamos los work items estructurados, no el resumen
+        if (esProductBacklog) {
+          await generarProductBacklogExcel(ini, wiItems);
+          return;
+        }
+
+        const res = await fetch('/.netlify/functions/anthropic', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': key,
-            'anthropic-version': '2023-06-01',
-            'anthropic-dangerous-direct-browser-access': 'true',
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             model: 'claude-sonnet-4-6',
             max_tokens: 8000,
